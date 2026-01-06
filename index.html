@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Building Destruction 3D - 스트레스 해소 게임</title>
+    <title>드론 슈팅 게임 - Drone Hunter 3D</title>
     <style>
         * {
             margin: 0;
@@ -14,7 +14,7 @@
         body {
             font-family: 'Arial', sans-serif;
             overflow: hidden;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #000;
         }
 
         #gameCanvas {
@@ -44,23 +44,56 @@
             pointer-events: none;
         }
 
-        #levelInfo {
-            background: rgba(0,0,0,0.7);
+        #stats {
+            background: rgba(0,0,0,0.8);
             padding: 15px 25px;
             border-radius: 10px;
-            border: 2px solid #FFD700;
+            border: 2px solid #00ff00;
+        }
+
+        .stat-line {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+            min-width: 250px;
+        }
+
+        .stat-label {
+            color: #00ff00;
+            margin-right: 15px;
+        }
+
+        .stat-value {
+            color: #ffffff;
+            font-weight: bold;
         }
 
         #weaponInfo {
             position: absolute;
             bottom: 20px;
-            left: 20px;
-            background: rgba(0,0,0,0.7);
+            right: 20px;
+            background: rgba(0,0,0,0.8);
             padding: 15px 25px;
             border-radius: 10px;
-            border: 2px solid #4CAF50;
+            border: 2px solid #ff6600;
             color: white;
             pointer-events: none;
+        }
+
+        #ammoBar {
+            width: 200px;
+            height: 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        #ammoFill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff6600, #ffaa00);
+            width: 100%;
+            transition: width 0.3s;
         }
 
         #crosshair {
@@ -68,30 +101,55 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 40px;
-            height: 40px;
+            width: 60px;
+            height: 60px;
             pointer-events: none;
         }
 
-        .crosshair-line {
+        .crosshair-part {
             position: absolute;
             background: rgba(255, 0, 0, 0.8);
         }
 
-        .crosshair-h {
-            width: 40px;
+        .crosshair-top {
+            width: 2px;
+            height: 15px;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .crosshair-bottom {
+            width: 2px;
+            height: 15px;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .crosshair-left {
+            width: 15px;
             height: 2px;
-            top: 50%;
             left: 0;
+            top: 50%;
             transform: translateY(-50%);
         }
 
-        .crosshair-v {
-            width: 2px;
-            height: 40px;
+        .crosshair-right {
+            width: 15px;
+            height: 2px;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .crosshair-center {
+            width: 4px;
+            height: 4px;
+            top: 50%;
             left: 50%;
-            top: 0;
-            transform: translateX(-50%);
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
         }
 
         #startScreen {
@@ -100,7 +158,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.9);
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -111,79 +169,186 @@
         }
 
         #startScreen h1 {
-            font-size: 48px;
-            margin-bottom: 20px;
-            color: #FFD700;
-            text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+            font-size: 56px;
+            margin-bottom: 15px;
+            color: #ff6600;
+            text-shadow: 0 0 20px rgba(255, 102, 0, 0.8);
+            letter-spacing: 3px;
+        }
+
+        #startScreen h2 {
+            font-size: 28px;
+            margin-bottom: 30px;
+            color: #00ff00;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
         }
 
         #startScreen p {
-            font-size: 20px;
+            font-size: 18px;
             margin-bottom: 30px;
             max-width: 600px;
             text-align: center;
-            line-height: 1.6;
+            line-height: 1.8;
+            color: #cccccc;
         }
 
         .btn {
-            padding: 15px 40px;
-            font-size: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 18px 50px;
+            font-size: 22px;
+            background: linear-gradient(135deg, #ff6600 0%, #ff9900 100%);
             color: white;
-            border: none;
+            border: 2px solid #ffaa00;
             border-radius: 10px;
             cursor: pointer;
             pointer-events: all;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s;
             margin: 10px;
+            text-transform: uppercase;
+            font-weight: bold;
+            box-shadow: 0 5px 20px rgba(255, 102, 0, 0.4);
         }
 
         .btn:hover {
-            transform: scale(1.1);
-            box-shadow: 0 0 20px rgba(102, 126, 234, 0.8);
+            transform: scale(1.1) translateY(-5px);
+            box-shadow: 0 10px 30px rgba(255, 102, 0, 0.8);
+            background: linear-gradient(135deg, #ff9900 0%, #ffcc00 100%);
         }
 
         #instructions {
-            margin-top: 30px;
+            margin-top: 40px;
             font-size: 16px;
             text-align: left;
-            background: rgba(255,255,255,0.1);
-            padding: 20px;
-            border-radius: 10px;
+            background: rgba(255,255,255,0.05);
+            padding: 25px;
+            border-radius: 15px;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
         }
 
-        #damageEffect {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 0, 0, 0);
-            pointer-events: none;
-            transition: background 0.3s;
+        .instruction-section {
+            margin-bottom: 20px;
         }
 
-        #destroyedText {
+        .instruction-title {
+            color: #ff6600;
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .instruction-item {
+            margin: 8px 0;
+            padding-left: 20px;
+            color: #dddddd;
+        }
+
+        #hitMarker {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 72px;
-            color: #FFD700;
-            text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+            width: 80px;
+            height: 80px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        .hit-line {
+            position: absolute;
+            background: #ff0000;
+            width: 20px;
+            height: 3px;
+        }
+
+        .hit-line1 {
+            top: 20px;
+            left: 20px;
+            transform: rotate(45deg);
+        }
+
+        .hit-line2 {
+            top: 20px;
+            right: 20px;
+            transform: rotate(-45deg);
+        }
+
+        .hit-line3 {
+            bottom: 20px;
+            left: 20px;
+            transform: rotate(-45deg);
+        }
+
+        .hit-line4 {
+            bottom: 20px;
+            right: 20px;
+            transform: rotate(45deg);
+        }
+
+        #hitMarker.show {
+            opacity: 1;
+        }
+
+        #killFeed {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            max-height: 400px;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .kill-message {
+            background: rgba(255, 102, 0, 0.9);
+            color: white;
+            padding: 10px 15px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-out 2.5s forwards;
+            font-weight: bold;
+            text-align: center;
+            border: 1px solid #ffaa00;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+        }
+
+        #reloadIndicator {
+            position: absolute;
+            bottom: 80px;
+            right: 20px;
+            color: #ff6600;
+            font-size: 24px;
+            font-weight: bold;
             opacity: 0;
             pointer-events: none;
-            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
         }
 
-        @keyframes destroyPulse {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.2); }
+        #reloadIndicator.show {
+            opacity: 1;
+            animation: pulse 0.5s ease-in-out infinite;
         }
 
-        .show-destroyed {
-            animation: destroyPulse 1s ease-in-out;
-            opacity: 1 !important;
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
         }
     </style>
 </head>
@@ -192,58 +357,108 @@
 
     <div id="ui">
         <div id="hud">
-            <div id="levelInfo">
-                <div>레벨: <span id="currentLevel">1</span> / 10</div>
-                <div>점수: <span id="score">0</span></div>
-                <div>파괴율: <span id="destructionPercent">0</span>%</div>
-                <div>남은 블록: <span id="remainingBlocks">0</span></div>
+            <div id="stats">
+                <div class="stat-line">
+                    <span class="stat-label">🎯 점수:</span>
+                    <span class="stat-value" id="score">0</span>
+                </div>
+                <div class="stat-line">
+                    <span class="stat-label">💥 격추:</span>
+                    <span class="stat-value" id="kills">0</span>
+                </div>
+                <div class="stat-line">
+                    <span class="stat-label">🎚️ 레벨:</span>
+                    <span class="stat-value" id="level">1</span>
+                </div>
+                <div class="stat-line">
+                    <span class="stat-label">⚡ 콤보:</span>
+                    <span class="stat-value" id="combo">0x</span>
+                </div>
+                <div class="stat-line">
+                    <span class="stat-label">🎪 정확도:</span>
+                    <span class="stat-value" id="accuracy">100%</span>
+                </div>
             </div>
         </div>
 
         <div id="weaponInfo">
-            <div>무기: <span id="currentWeapon">총</span></div>
-            <div>탄약: <span id="ammo">무제한</span></div>
-            <div>위력: <span id="power">보통</span></div>
-            <div style="margin-top: 10px; font-size: 14px;">
+            <div style="font-size: 20px; margin-bottom: 10px;">
+                <span style="color: #ff6600;">⚔️ 무기:</span>
+                <span id="weaponName" style="color: #ffaa00; font-weight: bold;">자동 소총</span>
+            </div>
+            <div style="font-size: 16px; margin-bottom: 5px;">
+                <span>탄약:</span>
+                <span id="ammo" style="color: #ffaa00; font-weight: bold;">30/300</span>
+            </div>
+            <div id="ammoBar">
+                <div id="ammoFill"></div>
+            </div>
+            <div style="margin-top: 15px; font-size: 14px; color: #cccccc;">
                 <div>[클릭] 발사</div>
-                <div>[1] 총 | [2] 대포</div>
-                <div>[R] 건물 재생성</div>
+                <div>[R] 재장전</div>
+                <div>[1-3] 무기 변경</div>
             </div>
         </div>
 
         <div id="crosshair">
-            <div class="crosshair-line crosshair-h"></div>
-            <div class="crosshair-line crosshair-v"></div>
+            <div class="crosshair-part crosshair-top"></div>
+            <div class="crosshair-part crosshair-bottom"></div>
+            <div class="crosshair-part crosshair-left"></div>
+            <div class="crosshair-part crosshair-right"></div>
+            <div class="crosshair-part crosshair-center"></div>
         </div>
 
-        <div id="damageEffect"></div>
-        <div id="destroyedText">건물 파괴 완료!</div>
+        <div id="hitMarker">
+            <div class="hit-line hit-line1"></div>
+            <div class="hit-line hit-line2"></div>
+            <div class="hit-line hit-line3"></div>
+            <div class="hit-line hit-line4"></div>
+        </div>
+
+        <div id="killFeed"></div>
+
+        <div id="reloadIndicator">재장전 중...</div>
     </div>
 
     <div id="startScreen">
-        <h1>🏢 Building Destruction 3D 🔫</h1>
+        <h1>🚁 DRONE HUNTER 3D 🎯</h1>
+        <h2>전술 드론 격추 시뮬레이터</h2>
         <p>
-            현대 건물을 파괴하며 스트레스를 해소하세요!<br>
-            10단계의 점점 더 강력한 건물을 파괴하세요.<br>
-            총과 대포를 사용하여 완벽한 파괴를 달성하세요!
+            하늘을 지배하는 적 드론을 격추하세요!<br>
+            다양한 무기로 빠르게 움직이는 드론을 명중시키고<br>
+            최고의 드론 헌터가 되어보세요!
         </p>
-        <button class="btn" onclick="startGame()">게임 시작</button>
+        <button class="btn" onclick="startGame()">🎮 게임 시작</button>
 
         <div id="instructions">
-            <strong>🎮 조작법:</strong><br>
-            • 마우스 이동: 카메라 회전<br>
-            • 마우스 클릭: 발사<br>
-            • 1 키: 총 선택 (빠른 연사, 낮은 위력)<br>
-            • 2 키: 대포 선택 (느린 연사, 높은 위력)<br>
-            • R 키: 현재 레벨 재시작<br>
-            • 마우스 휠: 카메라 줌 인/아웃<br><br>
-            <strong>🎯 목표:</strong><br>
-            각 레벨의 건물을 90% 이상 파괴하면 다음 레벨로 진행!
+            <div class="instruction-section">
+                <div class="instruction-title">🎮 조작법</div>
+                <div class="instruction-item">• 마우스 이동: 조준</div>
+                <div class="instruction-item">• 마우스 클릭: 발사</div>
+                <div class="instruction-item">• R 키: 재장전</div>
+                <div class="instruction-item">• 1 키: 자동 소총 (빠른 연사, 보통 위력)</div>
+                <div class="instruction-item">• 2 키: 저격 소총 (느린 연사, 높은 위력)</div>
+                <div class="instruction-item">• 3 키: 산탄총 (산탄, 근거리 고위력)</div>
+            </div>
+
+            <div class="instruction-section">
+                <div class="instruction-title">🎯 게임 목표</div>
+                <div class="instruction-item">• 빠르게 움직이는 드론을 격추하세요</div>
+                <div class="instruction-item">• 연속 격추로 콤보를 쌓으세요</div>
+                <div class="instruction-item">• 높은 정확도를 유지하세요</div>
+                <div class="instruction-item">• 레벨이 올라갈수록 드론이 더 빠르고 많아집니다</div>
+            </div>
+
+            <div class="instruction-section">
+                <div class="instruction-title">🏆 점수 시스템</div>
+                <div class="instruction-item">• 기본 격추: 100점</div>
+                <div class="instruction-item">• 콤보 보너스: 연속 격추마다 추가 점수</div>
+                <div class="instruction-item">• 정확도 보너스: 높은 명중률에 보너스</div>
+            </div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script>
     <script src="game.js"></script>
 </body>
 </html>

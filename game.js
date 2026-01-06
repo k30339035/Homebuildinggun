@@ -1,50 +1,111 @@
 // ============================================
-// 3D Building Destruction Game
+// 3D Drone Shooting Game - Drone Hunter
 // ============================================
 
 // Game State
 const gameState = {
     isPlaying: false,
-    currentLevel: 1,
     score: 0,
-    currentWeapon: 'gun', // 'gun' or 'cannon'
-    buildings: [],
-    projectiles: [],
+    kills: 0,
+    level: 1,
+    combo: 0,
+    comboTimer: 0,
+    shotsFired: 0,
+    shotsHit: 0,
+    currentWeapon: 'rifle',
+    weapons: {
+        rifle: {
+            name: '자동 소총',
+            damage: 25,
+            fireRate: 150,
+            magSize: 30,
+            totalAmmo: 300,
+            currentMag: 30,
+            reloadTime: 2000,
+            spread: 0.01,
+            bulletSpeed: 200
+        },
+        sniper: {
+            name: '저격 소총',
+            damage: 100,
+            fireRate: 1000,
+            magSize: 5,
+            totalAmmo: 50,
+            currentMag: 5,
+            reloadTime: 3000,
+            spread: 0.001,
+            bulletSpeed: 300
+        },
+        shotgun: {
+            name: '산탄총',
+            damage: 15,
+            fireRate: 800,
+            magSize: 8,
+            totalAmmo: 80,
+            currentMag: 8,
+            reloadTime: 2500,
+            spread: 0.08,
+            bulletSpeed: 150,
+            pellets: 8
+        }
+    },
+    drones: [],
+    bullets: [],
     particles: [],
-    totalBlocks: 0,
-    destroyedBlocks: 0,
+    explosions: [],
+    isReloading: false,
+    canShoot: true,
     mouseX: 0,
     mouseY: 0
 };
 
-// Scene Setup
-let scene, camera, renderer, world;
+// Three.js Scene Variables
+let scene, camera, renderer;
 let clock, delta;
-let ground, groundBody;
+let raycaster, mouse;
 
 // Audio Context
 let audioContext;
 let masterGain;
 
-// Level Configurations (10 levels, increasing difficulty)
-const levelConfigs = [
-    { name: "작은 사무실", floors: 3, width: 4, depth: 4, blockSize: 1.5, color: 0x8B4513 },
-    { name: "일반 빌딩", floors: 5, width: 5, depth: 5, blockSize: 1.3, color: 0x708090 },
-    { name: "중형 건물", floors: 7, width: 6, depth: 5, blockSize: 1.2, color: 0x4682B4 },
-    { name: "대형 오피스", floors: 9, width: 7, depth: 6, blockSize: 1.1, color: 0x2F4F4F },
-    { name: "현대식 타워", floors: 11, width: 8, depth: 7, blockSize: 1.0, color: 0x1C1C1C },
-    { name: "마천루 초입", floors: 13, width: 9, depth: 8, blockSize: 0.95, color: 0x191970 },
-    { name: "고층 빌딩", floors: 15, width: 10, depth: 9, blockSize: 0.9, color: 0x000080 },
-    { name: "초고층 빌딩", floors: 18, width: 11, depth: 10, blockSize: 0.85, color: 0x483D8B },
-    { name: "메가 타워", floors: 21, width: 12, depth: 11, blockSize: 0.8, color: 0x800000 },
-    { name: "궁극의 요새", floors: 25, width: 13, depth: 12, blockSize: 0.75, color: 0x8B0000 }
-];
+// Drone configurations by type
+const droneTypes = {
+    scout: {
+        health: 50,
+        speed: 0.8,
+        size: 1,
+        color: 0xff0000,
+        points: 100
+    },
+    fighter: {
+        health: 100,
+        speed: 1.2,
+        size: 1.3,
+        color: 0xff6600,
+        points: 200
+    },
+    heavy: {
+        health: 200,
+        speed: 0.5,
+        size: 1.8,
+        color: 0x8b0000,
+        points: 300
+    }
+};
 
-// Initialize Three.js Scene
+// ============================================
+// Scene Initialization
+// ============================================
+
 function initScene() {
+    // Scene
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB);
-    scene.fog = new THREE.Fog(0x87CEEB, 50, 200);
+
+    // Realistic sky gradient
+    const skyColor = new THREE.Color(0x87CEEB);
+    const horizonColor = new THREE.Color(0xE6F3FF);
+    scene.background = skyColor;
+    scene.fog = new THREE.Fog(skyColor, 100, 400);
 
     // Camera
     camera = new THREE.PerspectiveCamera(
@@ -53,10 +114,9 @@ function initScene() {
         0.1,
         1000
     );
-    camera.position.set(0, 15, 35);
-    camera.lookAt(0, 10, 0);
+    camera.position.set(0, 5, 0);
 
-    // Renderer with antialiasing for better quality
+    // Renderer
     renderer = new THREE.WebGLRenderer({
         canvas: document.getElementById('gameCanvas'),
         antialias: true,
@@ -65,685 +125,1080 @@ function initScene() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Lighting - Realistic sunlight
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(50, 50, 50);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 500;
-    directionalLight.shadow.camera.left = -50;
-    directionalLight.shadow.camera.right = 50;
-    directionalLight.shadow.camera.top = 50;
-    directionalLight.shadow.camera.bottom = -50;
-    scene.add(directionalLight);
+    const sunLight = new THREE.DirectionalLight(0xfff5e6, 1.5);
+    sunLight.position.set(100, 100, 50);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 4096;
+    sunLight.shadow.mapSize.height = 4096;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 500;
+    sunLight.shadow.camera.left = -100;
+    sunLight.shadow.camera.right = 100;
+    sunLight.shadow.camera.top = 100;
+    sunLight.shadow.camera.bottom = -100;
+    sunLight.shadow.bias = -0.0001;
+    scene.add(sunLight);
 
-    // Additional point lights for better illumination
-    const pointLight1 = new THREE.PointLight(0xffffff, 0.5, 100);
-    pointLight1.position.set(-20, 30, 20);
-    scene.add(pointLight1);
+    // Add sky dome
+    createSkyDome();
 
-    const pointLight2 = new THREE.PointLight(0xffffff, 0.5, 100);
-    pointLight2.position.set(20, 30, -20);
-    scene.add(pointLight2);
+    // Add clouds
+    createClouds();
 
-    // Ground
-    const groundGeometry = new THREE.PlaneGeometry(200, 200);
-    const groundMaterial = new THREE.MeshStandardMaterial({
-        color: 0x228B22,
-        roughness: 0.8,
-        metalness: 0.2
+    // Ground (terrain)
+    createGround();
+
+    // Raycaster for hit detection
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+
+    clock = new THREE.Clock();
+
+    console.log('Scene initialized');
+}
+
+function createSkyDome() {
+    const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+    const skyMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            topColor: { value: new THREE.Color(0x0077be) },
+            bottomColor: { value: new THREE.Color(0x89b2eb) },
+            offset: { value: 33 },
+            exponent: { value: 0.6 }
+        },
+        vertexShader: `
+            varying vec3 vWorldPosition;
+            void main() {
+                vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                vWorldPosition = worldPosition.xyz;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform vec3 topColor;
+            uniform vec3 bottomColor;
+            uniform float offset;
+            uniform float exponent;
+            varying vec3 vWorldPosition;
+            void main() {
+                float h = normalize(vWorldPosition + offset).y;
+                gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+            }
+        `,
+        side: THREE.BackSide
     });
-    ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    const skyDome = new THREE.Mesh(skyGeometry, skyMaterial);
+    scene.add(skyDome);
+}
+
+function createClouds() {
+    const cloudGeometry = new THREE.SphereGeometry(10, 8, 8);
+    const cloudMaterial = new THREE.MeshLambertMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.6
+    });
+
+    for (let i = 0; i < 30; i++) {
+        const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial);
+        cloud.position.set(
+            Math.random() * 400 - 200,
+            Math.random() * 50 + 50,
+            Math.random() * 400 - 200
+        );
+        cloud.scale.set(
+            Math.random() * 2 + 1,
+            Math.random() * 0.5 + 0.3,
+            Math.random() * 2 + 1
+        );
+        scene.add(cloud);
+    }
+}
+
+function createGround() {
+    const groundGeometry = new THREE.PlaneGeometry(500, 500, 50, 50);
+    const groundMaterial = new THREE.MeshStandardMaterial({
+        color: 0x3a7d44,
+        roughness: 0.9,
+        metalness: 0.1
+    });
+
+    // Add some random height variation
+    const vertices = groundGeometry.attributes.position.array;
+    for (let i = 0; i < vertices.length; i += 3) {
+        vertices[i + 2] = Math.random() * 2;
+    }
+    groundGeometry.attributes.position.needsUpdate = true;
+    groundGeometry.computeVertexNormals();
+
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -10;
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // Grid helper
-    const gridHelper = new THREE.GridHelper(200, 50, 0x000000, 0x333333);
+    // Add grid for better depth perception
+    const gridHelper = new THREE.GridHelper(500, 50, 0x000000, 0x333333);
+    gridHelper.position.y = -9.9;
+    gridHelper.material.opacity = 0.2;
+    gridHelper.material.transparent = true;
     scene.add(gridHelper);
-
-    clock = new THREE.Clock();
 }
 
-// Initialize Cannon.js Physics
-function initPhysics() {
-    world = new CANNON.World();
-    world.gravity.set(0, -20, 0);
-    world.broadphase = new CANNON.NaiveBroadphase();
-    world.solver.iterations = 10;
-    world.defaultContactMaterial.friction = 0.4;
+// ============================================
+// Audio System
+// ============================================
 
-    // Ground body
-    const groundShape = new CANNON.Plane();
-    groundBody = new CANNON.Body({
-        mass: 0,
-        material: new CANNON.Material({ friction: 0.5, restitution: 0.3 })
-    });
-    groundBody.addShape(groundShape);
-    groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-    world.addBody(groundBody);
-}
-
-// Advanced Audio System with Web Audio API
 function initAudioSystem() {
     try {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         masterGain = audioContext.createGain();
-        masterGain.gain.value = 0.7;
+        masterGain.gain.value = 0.5;
         masterGain.connect(audioContext.destination);
     } catch (e) {
         console.warn('Web Audio API not supported', e);
     }
 }
 
-// Create realistic sound using oscillators and filters
-function createExplosionSound(intensity = 1.0) {
+function playRifleSound() {
     if (!audioContext) return;
 
     const now = audioContext.currentTime;
 
-    // Main explosion bass
-    const bass = audioContext.createOscillator();
-    const bassGain = audioContext.createGain();
-    bass.type = 'sawtooth';
-    bass.frequency.setValueAtTime(60, now);
-    bass.frequency.exponentialRampToValueAtTime(20, now + 0.5);
-    bassGain.gain.setValueAtTime(0.8 * intensity, now);
-    bassGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-    bass.connect(bassGain);
-    bassGain.connect(masterGain);
-    bass.start(now);
-    bass.stop(now + 0.5);
+    // Sharp crack
+    const osc1 = audioContext.createOscillator();
+    const gain1 = audioContext.createGain();
+    osc1.type = 'square';
+    osc1.frequency.setValueAtTime(400, now);
+    osc1.frequency.exponentialRampToValueAtTime(100, now + 0.08);
+    gain1.gain.setValueAtTime(0.4, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    osc1.connect(gain1);
+    gain1.connect(masterGain);
+    osc1.start(now);
+    osc1.stop(now + 0.08);
 
-    // Mid-range explosion
-    const mid = audioContext.createOscillator();
-    const midGain = audioContext.createGain();
-    mid.type = 'square';
-    mid.frequency.setValueAtTime(200, now);
-    mid.frequency.exponentialRampToValueAtTime(50, now + 0.3);
-    midGain.gain.setValueAtTime(0.5 * intensity, now);
-    midGain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-    mid.connect(midGain);
-    midGain.connect(masterGain);
-    mid.start(now);
-    mid.stop(now + 0.3);
+    // Click
+    const osc2 = audioContext.createOscillator();
+    const gain2 = audioContext.createGain();
+    osc2.frequency.value = 1000;
+    gain2.gain.setValueAtTime(0.3, now);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.03);
+    osc2.connect(gain2);
+    gain2.connect(masterGain);
+    osc2.start(now);
+    osc2.stop(now + 0.03);
+}
 
-    // High-frequency crackle
-    const noise = audioContext.createBufferSource();
-    const noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.3, audioContext.sampleRate);
+function playSniperSound() {
+    if (!audioContext) return;
+
+    const now = audioContext.currentTime;
+
+    // Deep boom
+    const osc1 = audioContext.createOscillator();
+    const gain1 = audioContext.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(80, now);
+    osc1.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+    gain1.gain.setValueAtTime(0.6, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+    osc1.connect(gain1);
+    gain1.connect(masterGain);
+    osc1.start(now);
+    osc1.stop(now + 0.3);
+
+    // Sharp crack
+    const osc2 = audioContext.createOscillator();
+    const gain2 = audioContext.createGain();
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(600, now);
+    osc2.frequency.exponentialRampToValueAtTime(150, now + 0.15);
+    gain2.gain.setValueAtTime(0.5, now);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc2.connect(gain2);
+    gain2.connect(masterGain);
+    osc2.start(now);
+    osc2.stop(now + 0.15);
+}
+
+function playShotgunSound() {
+    if (!audioContext) return;
+
+    const now = audioContext.currentTime;
+
+    // Heavy boom
+    const osc1 = audioContext.createOscillator();
+    const gain1 = audioContext.createGain();
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(120, now);
+    osc1.frequency.exponentialRampToValueAtTime(40, now + 0.4);
+    gain1.gain.setValueAtTime(0.7, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc1.connect(gain1);
+    gain1.connect(masterGain);
+    osc1.start(now);
+    osc1.stop(now + 0.4);
+
+    // Noise burst
+    const bufferSize = audioContext.sampleRate * 0.2;
+    const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
     const noiseData = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < noiseBuffer.length; i++) {
+    for (let i = 0; i < bufferSize; i++) {
         noiseData[i] = Math.random() * 2 - 1;
     }
+    const noise = audioContext.createBufferSource();
     noise.buffer = noiseBuffer;
-
-    const noiseFilter = audioContext.createBiquadFilter();
-    noiseFilter.type = 'highpass';
-    noiseFilter.frequency.value = 2000;
-
     const noiseGain = audioContext.createGain();
-    noiseGain.gain.setValueAtTime(0.3 * intensity, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+    noiseGain.gain.setValueAtTime(0.4, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+    noise.connect(noiseGain);
+    noiseGain.connect(masterGain);
+    noise.start(now);
+}
 
+function playExplosionSound() {
+    if (!audioContext) return;
+
+    const now = audioContext.currentTime;
+
+    // Bass explosion
+    const osc1 = audioContext.createOscillator();
+    const gain1 = audioContext.createGain();
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(100, now);
+    osc1.frequency.exponentialRampToValueAtTime(20, now + 0.6);
+    gain1.gain.setValueAtTime(0.8, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+    osc1.connect(gain1);
+    gain1.connect(masterGain);
+    osc1.start(now);
+    osc1.stop(now + 0.6);
+
+    // Mid crunch
+    const osc2 = audioContext.createOscillator();
+    const gain2 = audioContext.createGain();
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(250, now);
+    osc2.frequency.exponentialRampToValueAtTime(50, now + 0.4);
+    gain2.gain.setValueAtTime(0.6, now);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc2.connect(gain2);
+    gain2.connect(masterGain);
+    osc2.start(now);
+    osc2.stop(now + 0.4);
+
+    // Noise explosion
+    const bufferSize = audioContext.sampleRate * 0.5;
+    const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        noiseData[i] = Math.random() * 2 - 1;
+    }
+    const noise = audioContext.createBufferSource();
+    noise.buffer = noiseBuffer;
+    const noiseFilter = audioContext.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.value = 1000;
+    const noiseGain = audioContext.createGain();
+    noiseGain.gain.setValueAtTime(0.5, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
     noiseGain.connect(masterGain);
     noise.start(now);
 }
 
-function createGunSound() {
+function playDroneSound() {
+    if (!audioContext) return;
+
+    const now = audioContext.currentTime;
+
+    // Drone buzzing
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(80, now);
+    osc.frequency.linearRampToValueAtTime(90, now + 0.1);
+    osc.frequency.linearRampToValueAtTime(80, now + 0.2);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+    osc.connect(gain);
+    gain.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + 0.2);
+}
+
+function playReloadSound() {
+    if (!audioContext) return;
+
+    const now = audioContext.currentTime;
+
+    // Mechanical click
+    const osc1 = audioContext.createOscillator();
+    const gain1 = audioContext.createGain();
+    osc1.frequency.value = 300;
+    gain1.gain.setValueAtTime(0.2, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+    osc1.connect(gain1);
+    gain1.connect(masterGain);
+    osc1.start(now);
+    osc1.stop(now + 0.05);
+
+    // Magazine insert
+    const osc2 = audioContext.createOscillator();
+    const gain2 = audioContext.createGain();
+    osc2.frequency.value = 200;
+    gain2.gain.setValueAtTime(0.25, now + 0.3);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc2.connect(gain2);
+    gain2.connect(masterGain);
+    osc2.start(now + 0.3);
+    osc2.stop(now + 0.4);
+
+    // Bolt release
+    const osc3 = audioContext.createOscillator();
+    const gain3 = audioContext.createGain();
+    osc3.frequency.value = 400;
+    gain3.gain.setValueAtTime(0.3, now + 0.6);
+    gain3.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
+    osc3.connect(gain3);
+    gain3.connect(masterGain);
+    osc3.start(now + 0.6);
+    osc3.stop(now + 0.7);
+}
+
+function playHitSound() {
     if (!audioContext) return;
 
     const now = audioContext.currentTime;
 
     const osc = audioContext.createOscillator();
     const gain = audioContext.createGain();
-
-    osc.type = 'square';
+    osc.type = 'triangle';
     osc.frequency.setValueAtTime(300, now);
-    osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
-
+    osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
     gain.gain.setValueAtTime(0.3, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
     osc.connect(gain);
     gain.connect(masterGain);
     osc.start(now);
-    osc.stop(now + 0.1);
-
-    // Click sound
-    const clickOsc = audioContext.createOscillator();
-    const clickGain = audioContext.createGain();
-    clickOsc.frequency.value = 1000;
-    clickGain.gain.setValueAtTime(0.2, now);
-    clickGain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-    clickOsc.connect(clickGain);
-    clickGain.connect(masterGain);
-    clickOsc.start(now);
-    clickOsc.stop(now + 0.05);
+    osc.stop(now + 0.15);
 }
 
-function createCannonSound() {
-    if (!audioContext) return;
+// ============================================
+// Drone System
+// ============================================
 
-    const now = audioContext.currentTime;
+function createDrone(type = 'scout') {
+    const config = droneTypes[type];
 
-    // Deep bass boom
-    const boom = audioContext.createOscillator();
-    const boomGain = audioContext.createGain();
-    boom.type = 'sine';
-    boom.frequency.setValueAtTime(40, now);
-    boom.frequency.exponentialRampToValueAtTime(20, now + 0.5);
-    boomGain.gain.setValueAtTime(0.9, now);
-    boomGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-    boom.connect(boomGain);
-    boomGain.connect(masterGain);
-    boom.start(now);
-    boom.stop(now + 0.5);
+    // Drone body (main body)
+    const bodyGeometry = new THREE.BoxGeometry(config.size, config.size * 0.3, config.size);
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: config.color,
+        roughness: 0.3,
+        metalness: 0.7,
+        emissive: config.color,
+        emissiveIntensity: 0.2
+    });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.castShadow = true;
+    body.receiveShadow = true;
 
-    // Mid explosion
-    const explosion = audioContext.createOscillator();
-    const explosionGain = audioContext.createGain();
-    explosion.type = 'sawtooth';
-    explosion.frequency.setValueAtTime(150, now);
-    explosion.frequency.exponentialRampToValueAtTime(50, now + 0.3);
-    explosionGain.gain.setValueAtTime(0.6, now);
-    explosionGain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-    explosion.connect(explosionGain);
-    explosionGain.connect(masterGain);
-    explosion.start(now);
-    explosion.stop(now + 0.3);
-}
+    // Drone group
+    const droneGroup = new THREE.Group();
+    droneGroup.add(body);
 
-function createImpactSound(velocity) {
-    if (!audioContext) return;
+    // Add propellers
+    const propellerGeometry = new THREE.CylinderGeometry(0.05, 0.05, config.size * 0.6, 8);
+    const propellerMaterial = new THREE.MeshStandardMaterial({
+        color: 0x333333,
+        roughness: 0.5,
+        metalness: 0.8
+    });
 
-    const now = audioContext.currentTime;
-    const intensity = Math.min(velocity / 20, 1.0);
+    const propellerPositions = [
+        [config.size * 0.4, 0, config.size * 0.4],
+        [config.size * 0.4, 0, -config.size * 0.4],
+        [-config.size * 0.4, 0, config.size * 0.4],
+        [-config.size * 0.4, 0, -config.size * 0.4]
+    ];
 
-    const impact = audioContext.createOscillator();
-    const impactGain = audioContext.createGain();
-    impact.type = 'triangle';
-    impact.frequency.setValueAtTime(150, now);
-    impact.frequency.exponentialRampToValueAtTime(50, now + 0.2);
-    impactGain.gain.setValueAtTime(0.5 * intensity, now);
-    impactGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-    impact.connect(impactGain);
-    impactGain.connect(masterGain);
-    impact.start(now);
-    impact.stop(now + 0.2);
-}
+    propellerPositions.forEach(pos => {
+        const propeller = new THREE.Mesh(propellerGeometry, propellerMaterial);
+        propeller.position.set(pos[0], pos[1], pos[2]);
+        propeller.rotation.x = Math.PI / 2;
+        droneGroup.add(propeller);
 
-function createDebrisSound() {
-    if (!audioContext) return;
+        // Add rotor blades
+        const bladeGeometry = new THREE.BoxGeometry(config.size * 0.4, 0.02, 0.08);
+        const bladeMaterial = new THREE.MeshStandardMaterial({
+            color: 0x222222,
+            roughness: 0.4,
+            metalness: 0.9
+        });
+        const blade1 = new THREE.Mesh(bladeGeometry, bladeMaterial);
+        const blade2 = new THREE.Mesh(bladeGeometry, bladeMaterial);
+        blade2.rotation.y = Math.PI / 2;
+        const bladeGroup = new THREE.Group();
+        bladeGroup.add(blade1);
+        bladeGroup.add(blade2);
+        bladeGroup.position.set(pos[0], pos[1] + config.size * 0.35, pos[2]);
+        droneGroup.add(bladeGroup);
 
-    const now = audioContext.currentTime;
+        // Store blade group for rotation animation
+        if (!droneGroup.userData.blades) droneGroup.userData.blades = [];
+        droneGroup.userData.blades.push(bladeGroup);
+    });
 
-    const debris = audioContext.createOscillator();
-    const debrisGain = audioContext.createGain();
-    debris.type = 'sawtooth';
-    debris.frequency.value = 80 + Math.random() * 40;
-    debrisGain.gain.setValueAtTime(0.2, now);
-    debrisGain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-    debris.connect(debrisGain);
-    debrisGain.connect(masterGain);
-    debris.start(now);
-    debris.stop(now + 0.15);
-}
+    // Add LED lights
+    const lightGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+    const lightMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        transparent: true,
+        opacity: 0.8
+    });
+    const light1 = new THREE.Mesh(lightGeometry, lightMaterial);
+    light1.position.set(config.size * 0.4, 0, 0);
+    droneGroup.add(light1);
 
-// Create Building with Physics
-function createBuilding(level) {
-    clearBuilding();
+    const light2 = new THREE.Mesh(lightGeometry, lightMaterial.clone());
+    light2.material.color.setHex(0x00ff00);
+    light2.position.set(-config.size * 0.4, 0, 0);
+    droneGroup.add(light2);
 
-    const config = levelConfigs[level - 1];
-    const { floors, width, depth, blockSize, color } = config;
+    // Random spawn position (sides of the screen, high altitude)
+    const side = Math.floor(Math.random() * 4);
+    let startX, startY, startZ, targetX, targetZ;
 
-    gameState.totalBlocks = 0;
-    gameState.destroyedBlocks = 0;
+    startY = 20 + Math.random() * 30;
 
-    const startY = blockSize / 2;
-
-    for (let floor = 0; floor < floors; floor++) {
-        for (let x = 0; x < width; x++) {
-            for (let z = 0; z < depth; z++) {
-                createBlock(
-                    (x - width / 2) * blockSize,
-                    startY + floor * blockSize,
-                    (z - depth / 2) * blockSize,
-                    blockSize,
-                    color,
-                    floor
-                );
-            }
-        }
+    switch(side) {
+        case 0: // Left
+            startX = -150;
+            startZ = Math.random() * 100 - 50;
+            targetX = 150;
+            targetZ = Math.random() * 100 - 50;
+            break;
+        case 1: // Right
+            startX = 150;
+            startZ = Math.random() * 100 - 50;
+            targetX = -150;
+            targetZ = Math.random() * 100 - 50;
+            break;
+        case 2: // Front
+            startX = Math.random() * 100 - 50;
+            startZ = -150;
+            targetX = Math.random() * 100 - 50;
+            targetZ = 150;
+            break;
+        case 3: // Back
+            startX = Math.random() * 100 - 50;
+            startZ = 150;
+            targetX = Math.random() * 100 - 50;
+            targetZ = -150;
+            break;
     }
 
-    updateHUD();
-    console.log(`Building created: ${config.name} with ${gameState.totalBlocks} blocks`);
-}
+    droneGroup.position.set(startX, startY, startZ);
 
-function createBlock(x, y, z, size, baseColor, floor) {
-    // Vary color by floor
-    const colorVariation = floor * 0x050505;
-    const blockColor = baseColor + colorVariation;
+    // Calculate direction
+    const direction = new THREE.Vector3(targetX - startX, 0, targetZ - startZ);
+    direction.normalize();
 
-    // Three.js mesh
-    const geometry = new THREE.BoxGeometry(size * 0.95, size * 0.95, size * 0.95);
-    const material = new THREE.MeshStandardMaterial({
-        color: blockColor,
-        roughness: 0.7,
-        metalness: 0.3,
-        flatShading: false
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y, z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    scene.add(mesh);
+    // Look at target
+    droneGroup.lookAt(new THREE.Vector3(targetX, startY, targetZ));
 
-    // Cannon.js body
-    const shape = new CANNON.Box(new CANNON.Vec3(size / 2, size / 2, size / 2));
-    const body = new CANNON.Body({
-        mass: 5,
-        shape: shape,
-        material: new CANNON.Material({ friction: 0.5, restitution: 0.1 })
-    });
-    body.position.set(x, y, z);
-    body.linearDamping = 0.3;
-    body.angularDamping = 0.3;
-    world.addBody(body);
+    scene.add(droneGroup);
 
-    const block = {
-        mesh: mesh,
-        body: body,
-        health: 100,
-        destroyed: false,
-        size: size
+    const drone = {
+        mesh: droneGroup,
+        type: type,
+        health: config.health,
+        maxHealth: config.health,
+        speed: config.speed * (1 + gameState.level * 0.1),
+        direction: direction,
+        target: new THREE.Vector3(targetX, startY, targetZ),
+        points: config.points,
+        size: config.size
     };
 
-    gameState.buildings.push(block);
-    gameState.totalBlocks++;
+    gameState.drones.push(drone);
+    playDroneSound();
+
+    return drone;
 }
 
-function clearBuilding() {
-    gameState.buildings.forEach(block => {
-        scene.remove(block.mesh);
-        world.removeBody(block.body);
+function updateDrones(delta) {
+    gameState.drones.forEach((drone, index) => {
+        // Move drone
+        drone.mesh.position.addScaledVector(drone.direction, drone.speed * delta * 60);
+
+        // Rotate propeller blades
+        if (drone.mesh.userData.blades) {
+            drone.mesh.userData.blades.forEach(blade => {
+                blade.rotation.y += delta * 30;
+            });
+        }
+
+        // Add slight bobbing motion
+        drone.mesh.position.y += Math.sin(Date.now() * 0.003 + index) * 0.05;
+
+        // Add slight rotation wobble
+        drone.mesh.rotation.z = Math.sin(Date.now() * 0.002 + index) * 0.05;
+
+        // Remove if out of bounds
+        const distance = drone.mesh.position.distanceTo(drone.target);
+        if (distance < 10 || drone.mesh.position.length() > 300) {
+            scene.remove(drone.mesh);
+            gameState.drones.splice(index, 1);
+        }
     });
-    gameState.buildings = [];
-    gameState.totalBlocks = 0;
-    gameState.destroyedBlocks = 0;
 }
 
-// Projectile System
-function shootProjectile() {
-    const isGun = gameState.currentWeapon === 'gun';
+function spawnDrones() {
+    const dronesPerLevel = Math.min(3 + gameState.level, 8);
+    const droneTypes = ['scout', 'scout', 'fighter', 'heavy'];
 
-    // Play weapon sound
-    if (isGun) {
-        createGunSound();
-    } else {
-        createCannonSound();
+    for (let i = 0; i < dronesPerLevel; i++) {
+        const type = droneTypes[Math.floor(Math.random() * Math.min(droneTypes.length, 1 + gameState.level / 2))];
+        setTimeout(() => {
+            if (gameState.isPlaying) {
+                createDrone(type);
+            }
+        }, i * 2000);
+    }
+}
+
+// ============================================
+// Weapon System
+// ============================================
+
+function shoot() {
+    if (!gameState.canShoot || gameState.isReloading || !gameState.isPlaying) return;
+
+    const weapon = gameState.weapons[gameState.currentWeapon];
+
+    if (weapon.currentMag <= 0) {
+        // Auto reload if magazine is empty
+        reload();
+        return;
     }
 
-    // Calculate direction from camera
+    // Decrease ammo
+    weapon.currentMag--;
+    gameState.shotsFired++;
+    gameState.canShoot = false;
+
+    // Play weapon sound
+    if (gameState.currentWeapon === 'rifle') {
+        playRifleSound();
+    } else if (gameState.currentWeapon === 'sniper') {
+        playSniperSound();
+    } else if (gameState.currentWeapon === 'shotgun') {
+        playShotgunSound();
+    }
+
+    // Fire bullets
+    const pellets = gameState.currentWeapon === 'shotgun' ? weapon.pellets : 1;
+
+    for (let i = 0; i < pellets; i++) {
+        fireBullet(weapon);
+    }
+
+    // Reset shoot cooldown
+    setTimeout(() => {
+        gameState.canShoot = true;
+    }, weapon.fireRate);
+
+    updateHUD();
+}
+
+function fireBullet(weapon) {
+    // Get camera direction
     const direction = new THREE.Vector3();
     camera.getWorldDirection(direction);
 
+    // Add spread
+    direction.x += (Math.random() - 0.5) * weapon.spread;
+    direction.y += (Math.random() - 0.5) * weapon.spread;
+    direction.z += (Math.random() - 0.5) * weapon.spread;
+    direction.normalize();
+
+    // Starting position
     const startPos = camera.position.clone();
     startPos.add(direction.clone().multiplyScalar(2));
 
-    const speed = isGun ? 80 : 50;
-    const size = isGun ? 0.3 : 0.8;
-    const damage = isGun ? 25 : 80;
-    const color = isGun ? 0xFFFF00 : 0xFF4500;
-
-    // Three.js projectile
-    const geometry = new THREE.SphereGeometry(size, 8, 8);
-    const material = new THREE.MeshStandardMaterial({
-        color: color,
-        emissive: color,
-        emissiveIntensity: 0.8
+    // Create bullet tracer
+    const bulletGeometry = new THREE.SphereGeometry(0.1, 4, 4);
+    const bulletMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffff00,
+        transparent: true,
+        opacity: 0.8
     });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(startPos);
-    scene.add(mesh);
+    const bulletMesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
+    bulletMesh.position.copy(startPos);
+    scene.add(bulletMesh);
 
-    // Add point light to projectile
-    const light = new THREE.PointLight(color, 2, 10);
-    mesh.add(light);
-
-    // Cannon.js body
-    const shape = new CANNON.Sphere(size);
-    const body = new CANNON.Body({
-        mass: isGun ? 0.5 : 5,
-        shape: shape
+    // Create bullet trail
+    const trailGeometry = new THREE.BufferGeometry();
+    const trailMaterial = new THREE.LineBasicMaterial({
+        color: 0xffaa00,
+        transparent: true,
+        opacity: 0.6,
+        linewidth: 2
     });
-    body.position.set(startPos.x, startPos.y, startPos.z);
-    body.velocity.set(
-        direction.x * speed,
-        direction.y * speed,
-        direction.z * speed
-    );
-    world.addBody(body);
+    const trailPositions = new Float32Array([
+        startPos.x, startPos.y, startPos.z,
+        startPos.x, startPos.y, startPos.z
+    ]);
+    trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    const trail = new THREE.Line(trailGeometry, trailMaterial);
+    scene.add(trail);
 
-    const projectile = {
-        mesh: mesh,
-        body: body,
-        damage: damage,
-        lifetime: 5,
-        isGun: isGun
+    const bullet = {
+        mesh: bulletMesh,
+        trail: trail,
+        direction: direction,
+        speed: weapon.bulletSpeed,
+        damage: weapon.damage,
+        lifetime: 2,
+        distanceTraveled: 0
     };
 
-    gameState.projectiles.push(projectile);
+    gameState.bullets.push(bullet);
 
-    // Add collision event
-    body.addEventListener('collide', (event) => {
-        handleProjectileCollision(projectile, event);
-    });
-}
+    // Check for hits immediately using raycasting
+    raycaster.set(startPos, direction);
+    const intersects = raycaster.intersectObjects(
+        gameState.drones.map(d => d.mesh),
+        true
+    );
 
-function handleProjectileCollision(projectile, event) {
-    const velocity = projectile.body.velocity.length();
-
-    // Check if hit a building block
-    gameState.buildings.forEach(block => {
-        if (!block.destroyed && event.body === block.body) {
-            block.health -= projectile.damage;
-
-            createImpactSound(velocity);
-            createParticleExplosion(block.mesh.position, block.size);
-
-            if (block.health <= 0) {
-                destroyBlock(block);
-                createExplosionSound(0.5);
+    if (intersects.length > 0) {
+        // Find which drone was hit
+        for (let drone of gameState.drones) {
+            if (intersects[0].object.parent === drone.mesh || intersects[0].object === drone.mesh) {
+                hitDrone(drone, weapon.damage, intersects[0].point);
+                break;
             }
         }
-    });
-
-    // Create explosion effect
-    if (!projectile.isGun) {
-        createExplosionParticles(projectile.mesh.position);
-        createExplosionSound(1.0);
-
-        // Apply explosion force to nearby blocks
-        const explosionRadius = 5;
-        const explosionForce = 20;
-
-        gameState.buildings.forEach(block => {
-            if (!block.destroyed) {
-                const distance = block.body.position.distanceTo(projectile.body.position);
-                if (distance < explosionRadius) {
-                    const force = explosionForce * (1 - distance / explosionRadius);
-                    const direction = block.body.position.vsub(projectile.body.position);
-                    direction.normalize();
-                    block.body.applyImpulse(
-                        direction.scale(force),
-                        block.body.position
-                    );
-
-                    block.health -= projectile.damage * (1 - distance / explosionRadius);
-                    if (block.health <= 0) {
-                        destroyBlock(block);
-                    }
-                }
-            }
-        });
     }
 }
 
-function destroyBlock(block) {
-    block.destroyed = true;
-    gameState.destroyedBlocks++;
-    gameState.score += 100;
+function updateBullets(delta) {
+    gameState.bullets.forEach((bullet, index) => {
+        bullet.lifetime -= delta;
 
-    // Visual feedback
-    block.mesh.material.color.setHex(0x000000);
-    block.mesh.material.transparent = true;
-    block.mesh.material.opacity = 0.3;
+        if (bullet.lifetime <= 0) {
+            scene.remove(bullet.mesh);
+            scene.remove(bullet.trail);
+            gameState.bullets.splice(index, 1);
+            return;
+        }
 
-    createDebrisSound();
-    createDebrisParticles(block.mesh.position, block.size);
+        // Move bullet
+        const moveDistance = bullet.speed * delta;
+        bullet.mesh.position.addScaledVector(bullet.direction, moveDistance);
+        bullet.distanceTraveled += moveDistance;
 
-    updateHUD();
-    checkLevelComplete();
+        // Update trail
+        const positions = bullet.trail.geometry.attributes.position.array;
+        positions[3] = bullet.mesh.position.x;
+        positions[4] = bullet.mesh.position.y;
+        positions[5] = bullet.mesh.position.z;
+        bullet.trail.geometry.attributes.position.needsUpdate = true;
+
+        // Fade out bullet and trail
+        bullet.mesh.material.opacity = bullet.lifetime * 0.5;
+        bullet.trail.material.opacity = bullet.lifetime * 0.3;
+    });
 }
 
-// Particle System
-function createParticleExplosion(position, size) {
+function reload() {
+    if (gameState.isReloading || !gameState.isPlaying) return;
+
+    const weapon = gameState.weapons[gameState.currentWeapon];
+
+    if (weapon.currentMag === weapon.magSize || weapon.totalAmmo <= 0) {
+        return; // Magazine already full or no ammo left
+    }
+
+    gameState.isReloading = true;
+    document.getElementById('reloadIndicator').classList.add('show');
+
+    playReloadSound();
+
+    setTimeout(() => {
+        const ammoNeeded = weapon.magSize - weapon.currentMag;
+        const ammoToReload = Math.min(ammoNeeded, weapon.totalAmmo);
+
+        weapon.currentMag += ammoToReload;
+        weapon.totalAmmo -= ammoToReload;
+
+        gameState.isReloading = false;
+        document.getElementById('reloadIndicator').classList.remove('show');
+        updateHUD();
+    }, weapon.reloadTime);
+}
+
+function switchWeapon(weaponType) {
+    if (gameState.isReloading || !gameState.isPlaying) return;
+    gameState.currentWeapon = weaponType;
+    updateHUD();
+}
+
+// ============================================
+// Combat System
+// ============================================
+
+function hitDrone(drone, damage, hitPoint) {
+    drone.health -= damage;
+    gameState.shotsHit++;
+
+    playHitSound();
+    showHitMarker();
+    createHitParticles(hitPoint);
+
+    if (drone.health <= 0) {
+        destroyDrone(drone);
+    }
+}
+
+function destroyDrone(drone) {
+    playExplosionSound();
+    createExplosion(drone.mesh.position, drone.size);
+
+    // Update score and stats
+    gameState.score += drone.points * (1 + gameState.combo * 0.5);
+    gameState.kills++;
+    gameState.combo++;
+    gameState.comboTimer = 3; // 3 seconds to keep combo
+
+    // Show kill message
+    showKillMessage(drone.type, drone.points);
+
+    // Remove drone
+    scene.remove(drone.mesh);
+    const index = gameState.drones.indexOf(drone);
+    if (index > -1) {
+        gameState.drones.splice(index, 1);
+    }
+
+    // Check for level progression
+    if (gameState.drones.length === 0) {
+        setTimeout(() => {
+            gameState.level++;
+            updateHUD();
+            spawnDrones();
+        }, 2000);
+    }
+
+    updateHUD();
+}
+
+function showHitMarker() {
+    const hitMarker = document.getElementById('hitMarker');
+    hitMarker.classList.add('show');
+    setTimeout(() => {
+        hitMarker.classList.remove('show');
+    }, 100);
+}
+
+function showKillMessage(droneType, points) {
+    const killFeed = document.getElementById('killFeed');
+    const message = document.createElement('div');
+    message.className = 'kill-message';
+
+    const comboText = gameState.combo > 1 ? ` (${gameState.combo}x 콤보!)` : '';
+    message.textContent = `${droneType.toUpperCase()} 격추! +${points}${comboText}`;
+
+    killFeed.insertBefore(message, killFeed.firstChild);
+
+    setTimeout(() => {
+        if (message.parentNode) {
+            message.remove();
+        }
+    }, 3000);
+}
+
+// ============================================
+// Particle Effects
+// ============================================
+
+function createHitParticles(position) {
     const particleCount = 10;
+    const geometry = new THREE.SphereGeometry(0.05, 4, 4);
 
     for (let i = 0; i < particleCount; i++) {
-        const geometry = new THREE.BoxGeometry(size * 0.1, size * 0.1, size * 0.1);
-        const material = new THREE.MeshStandardMaterial({
-            color: Math.random() * 0xFFFFFF,
+        const material = new THREE.MeshBasicMaterial({
+            color: Math.random() > 0.5 ? 0xff6600 : 0xffaa00,
             transparent: true,
             opacity: 1
         });
+
         const particle = new THREE.Mesh(geometry, material);
         particle.position.copy(position);
         scene.add(particle);
 
         const velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 10,
-            Math.random() * 10,
-            (Math.random() - 0.5) * 10
+            (Math.random() - 0.5) * 2,
+            (Math.random() - 0.5) * 2,
+            (Math.random() - 0.5) * 2
         );
 
         gameState.particles.push({
             mesh: particle,
             velocity: velocity,
-            lifetime: 2,
-            fadeRate: 0.5
+            lifetime: 0.5,
+            fadeRate: 2
         });
     }
 }
 
-function createExplosionParticles(position) {
-    const particleCount = 30;
+function createExplosion(position, size) {
+    // Main explosion flash
+    const flashGeometry = new THREE.SphereGeometry(size * 2, 16, 16);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff6600,
+        transparent: true,
+        opacity: 1
+    });
+    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+    flash.position.copy(position);
+    scene.add(flash);
+
+    gameState.explosions.push({
+        mesh: flash,
+        lifetime: 0.3,
+        maxSize: size * 4,
+        currentSize: size * 2
+    });
+
+    // Debris particles
+    const particleCount = 50;
+    const particleGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
 
     for (let i = 0; i < particleCount; i++) {
-        const geometry = new THREE.SphereGeometry(0.2, 4, 4);
-        const material = new THREE.MeshBasicMaterial({
-            color: 0xFF4500,
+        const material = new THREE.MeshStandardMaterial({
+            color: Math.random() > 0.5 ? 0x333333 : 0xff4500,
             transparent: true,
-            opacity: 1
+            opacity: 1,
+            emissive: 0xff4500,
+            emissiveIntensity: 0.5
         });
-        const particle = new THREE.Mesh(geometry, material);
+
+        const particle = new THREE.Mesh(particleGeometry, material);
         particle.position.copy(position);
         scene.add(particle);
 
         const velocity = new THREE.Vector3(
             (Math.random() - 0.5) * 15,
-            Math.random() * 15,
+            Math.random() * 10,
             (Math.random() - 0.5) * 15
         );
 
         gameState.particles.push({
             mesh: particle,
             velocity: velocity,
-            lifetime: 1.5,
-            fadeRate: 0.7
+            lifetime: 2,
+            fadeRate: 0.5,
+            hasGravity: true
         });
     }
-}
 
-function createDebrisParticles(position, size) {
-    const particleCount = 15;
+    // Smoke particles
+    const smokeCount = 20;
+    const smokeGeometry = new THREE.SphereGeometry(size * 0.5, 8, 8);
 
-    for (let i = 0; i < particleCount; i++) {
-        const geometry = new THREE.BoxGeometry(size * 0.15, size * 0.15, size * 0.15);
-        const material = new THREE.MeshStandardMaterial({
-            color: 0x8B4513,
+    for (let i = 0; i < smokeCount; i++) {
+        const material = new THREE.MeshBasicMaterial({
+            color: 0x333333,
             transparent: true,
-            opacity: 1
+            opacity: 0.6
         });
-        const particle = new THREE.Mesh(geometry, material);
-        particle.position.copy(position);
-        scene.add(particle);
+
+        const smoke = new THREE.Mesh(smokeGeometry, material);
+        smoke.position.copy(position);
+        scene.add(smoke);
 
         const velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 8,
-            Math.random() * 8 + 2,
-            (Math.random() - 0.5) * 8
+            (Math.random() - 0.5) * 3,
+            Math.random() * 5 + 2,
+            (Math.random() - 0.5) * 3
         );
 
         gameState.particles.push({
-            mesh: particle,
+            mesh: smoke,
             velocity: velocity,
             lifetime: 3,
-            fadeRate: 0.33
+            fadeRate: 0.2,
+            isSmoke: true
         });
     }
 }
 
 function updateParticles(delta) {
-    gameState.particles = gameState.particles.filter(particle => {
+    gameState.particles.forEach((particle, index) => {
         particle.lifetime -= delta;
 
         if (particle.lifetime <= 0) {
             scene.remove(particle.mesh);
-            return false;
+            gameState.particles.splice(index, 1);
+            return;
         }
 
-        particle.velocity.y -= 9.8 * delta;
+        // Apply gravity
+        if (particle.hasGravity) {
+            particle.velocity.y -= 9.8 * delta;
+        }
+
+        // Move particle
         particle.mesh.position.add(particle.velocity.clone().multiplyScalar(delta));
+
+        // Fade out
         particle.mesh.material.opacity = particle.lifetime * particle.fadeRate;
 
-        return true;
+        // Smoke expands and rises
+        if (particle.isSmoke) {
+            particle.mesh.scale.multiplyScalar(1 + delta * 0.5);
+            particle.velocity.y += delta * 2;
+        }
+
+        // Rotate debris
+        if (particle.hasGravity) {
+            particle.mesh.rotation.x += delta * 10;
+            particle.mesh.rotation.y += delta * 15;
+        }
     });
 }
 
+function updateExplosions(delta) {
+    gameState.explosions.forEach((explosion, index) => {
+        explosion.lifetime -= delta;
+
+        if (explosion.lifetime <= 0) {
+            scene.remove(explosion.mesh);
+            gameState.explosions.splice(index, 1);
+            return;
+        }
+
+        // Expand explosion
+        explosion.currentSize += (explosion.maxSize - explosion.currentSize) * delta * 10;
+        explosion.mesh.scale.setScalar(explosion.currentSize / 2);
+
+        // Fade out
+        explosion.mesh.material.opacity = explosion.lifetime / 0.3;
+    });
+}
+
+// ============================================
 // Game Logic
-function checkLevelComplete() {
-    const destructionPercent = (gameState.destroyedBlocks / gameState.totalBlocks) * 100;
+// ============================================
 
-    if (destructionPercent >= 90) {
-        setTimeout(() => {
-            showDestroyedMessage();
-            gameState.score += 1000 * gameState.currentLevel;
-
-            setTimeout(() => {
-                if (gameState.currentLevel < 10) {
-                    gameState.currentLevel++;
-                    createBuilding(gameState.currentLevel);
-                    hideDestroyedMessage();
-                } else {
-                    alert('축하합니다! 모든 레벨을 완료했습니다!\n최종 점수: ' + gameState.score);
-                    gameState.currentLevel = 1;
-                    createBuilding(gameState.currentLevel);
-                    hideDestroyedMessage();
-                }
-            }, 2000);
-        }, 500);
+function updateComboTimer(delta) {
+    if (gameState.comboTimer > 0) {
+        gameState.comboTimer -= delta;
+        if (gameState.comboTimer <= 0) {
+            gameState.combo = 0;
+            updateHUD();
+        }
     }
-}
-
-function showDestroyedMessage() {
-    const text = document.getElementById('destroyedText');
-    text.classList.add('show-destroyed');
-    createExplosionSound(1.5);
-}
-
-function hideDestroyedMessage() {
-    const text = document.getElementById('destroyedText');
-    text.classList.remove('show-destroyed');
 }
 
 function updateHUD() {
-    document.getElementById('currentLevel').textContent = gameState.currentLevel;
-    document.getElementById('score').textContent = gameState.score;
+    document.getElementById('score').textContent = Math.floor(gameState.score);
+    document.getElementById('kills').textContent = gameState.kills;
+    document.getElementById('level').textContent = gameState.level;
+    document.getElementById('combo').textContent = gameState.combo + 'x';
 
-    const destructionPercent = gameState.totalBlocks > 0
-        ? ((gameState.destroyedBlocks / gameState.totalBlocks) * 100).toFixed(1)
-        : 0;
-    document.getElementById('destructionPercent').textContent = destructionPercent;
+    const accuracy = gameState.shotsFired > 0
+        ? Math.round((gameState.shotsHit / gameState.shotsFired) * 100)
+        : 100;
+    document.getElementById('accuracy').textContent = accuracy + '%';
 
-    const remaining = gameState.totalBlocks - gameState.destroyedBlocks;
-    document.getElementById('remainingBlocks').textContent = remaining;
+    const weapon = gameState.weapons[gameState.currentWeapon];
+    document.getElementById('weaponName').textContent = weapon.name;
+    document.getElementById('ammo').textContent = `${weapon.currentMag}/${weapon.totalAmmo}`;
 
-    const weaponName = gameState.currentWeapon === 'gun' ? '총' : '대포';
-    document.getElementById('currentWeapon').textContent = weaponName;
-
-    const power = gameState.currentWeapon === 'gun' ? '보통' : '강력';
-    document.getElementById('power').textContent = power;
+    const ammoPercent = (weapon.currentMag / weapon.magSize) * 100;
+    document.getElementById('ammoFill').style.width = ammoPercent + '%';
 }
 
+// ============================================
 // Input Handling
-let canShoot = true;
-const shootCooldown = { gun: 200, cannon: 800 };
+// ============================================
 
 document.addEventListener('click', () => {
     if (!gameState.isPlaying) return;
-
-    if (canShoot) {
-        shootProjectile();
-        canShoot = false;
-        setTimeout(() => {
-            canShoot = true;
-        }, shootCooldown[gameState.currentWeapon]);
-    }
+    shoot();
 });
 
 document.addEventListener('keydown', (e) => {
     if (!gameState.isPlaying) return;
 
-    if (e.key === '1') {
-        gameState.currentWeapon = 'gun';
-        updateHUD();
+    if (e.key === 'r' || e.key === 'R') {
+        reload();
+    } else if (e.key === '1') {
+        switchWeapon('rifle');
     } else if (e.key === '2') {
-        gameState.currentWeapon = 'cannon';
-        updateHUD();
-    } else if (e.key === 'r' || e.key === 'R') {
-        createBuilding(gameState.currentLevel);
+        switchWeapon('sniper');
+    } else if (e.key === '3') {
+        switchWeapon('shotgun');
     }
 });
 
-// Mouse movement for camera control
 document.addEventListener('mousemove', (e) => {
     if (!gameState.isPlaying) return;
 
     gameState.mouseX = (e.clientX / window.innerWidth) * 2 - 1;
     gameState.mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+
+    // Update mouse position for raycasting
+    mouse.x = gameState.mouseX;
+    mouse.y = gameState.mouseY;
 });
 
-// Mouse wheel for zoom
-document.addEventListener('wheel', (e) => {
-    if (!gameState.isPlaying) return;
-
-    const zoomSpeed = 2;
-    const direction = new THREE.Vector3();
-    camera.getWorldDirection(direction);
-
-    if (e.deltaY < 0) {
-        camera.position.add(direction.multiplyScalar(zoomSpeed));
-    } else {
-        camera.position.sub(direction.multiplyScalar(zoomSpeed));
-    }
-
-    // Limit zoom
-    const distance = camera.position.length();
-    if (distance < 10) {
-        camera.position.normalize().multiplyScalar(10);
-    } else if (distance > 60) {
-        camera.position.normalize().multiplyScalar(60);
+// Pointer lock for better aiming
+document.getElementById('gameCanvas').addEventListener('click', () => {
+    if (gameState.isPlaying) {
+        document.getElementById('gameCanvas').requestPointerLock =
+            document.getElementById('gameCanvas').requestPointerLock ||
+            document.getElementById('gameCanvas').mozRequestPointerLock;
+        document.getElementById('gameCanvas').requestPointerLock();
     }
 });
 
-// Window resize
+document.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement === document.getElementById('gameCanvas')) {
+        // Pointer is locked, use movementX/Y for camera rotation
+        const sensitivity = 0.002;
+        camera.rotation.y -= e.movementX * sensitivity;
+        camera.rotation.x -= e.movementY * sensitivity;
+
+        // Limit vertical rotation
+        camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+    }
+});
+
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// ============================================
 // Animation Loop
+// ============================================
+
 function animate() {
     requestAnimationFrame(animate);
 
@@ -751,63 +1206,45 @@ function animate() {
 
     delta = clock.getDelta();
 
-    // Update physics
-    world.step(1/60, delta, 3);
-
-    // Update building blocks
-    gameState.buildings.forEach(block => {
-        block.mesh.position.copy(block.body.position);
-        block.mesh.quaternion.copy(block.body.quaternion);
-
-        // Remove blocks that fall too far
-        if (block.body.position.y < -20 && !block.destroyed) {
-            destroyBlock(block);
-        }
-    });
-
-    // Update projectiles
-    gameState.projectiles = gameState.projectiles.filter(projectile => {
-        projectile.lifetime -= delta;
-
-        if (projectile.lifetime <= 0 || projectile.body.position.y < -10) {
-            scene.remove(projectile.mesh);
-            world.removeBody(projectile.body);
-            return false;
-        }
-
-        projectile.mesh.position.copy(projectile.body.position);
-        projectile.mesh.quaternion.copy(projectile.body.quaternion);
-
-        return true;
-    });
-
-    // Update particles
+    // Update game systems
+    updateDrones(delta);
+    updateBullets(delta);
     updateParticles(delta);
+    updateExplosions(delta);
+    updateComboTimer(delta);
 
-    // Camera follow mouse (smooth camera rotation)
-    const targetX = gameState.mouseX * 10;
-    const targetY = 15 + gameState.mouseY * 5;
-
-    camera.position.x += (targetX - camera.position.x) * 0.05;
-    camera.position.y += (targetY - camera.position.y) * 0.05;
-    camera.lookAt(0, 10, 0);
-
+    // Render scene
     renderer.render(scene, camera);
 }
 
-// Start Game
+// ============================================
+// Game Start
+// ============================================
+
 function startGame() {
     document.getElementById('startScreen').style.display = 'none';
+
     gameState.isPlaying = true;
-    gameState.currentLevel = 1;
     gameState.score = 0;
+    gameState.kills = 0;
+    gameState.level = 1;
+    gameState.combo = 0;
+    gameState.shotsFired = 0;
+    gameState.shotsHit = 0;
+
+    // Reset weapons
+    Object.values(gameState.weapons).forEach(weapon => {
+        weapon.currentMag = weapon.magSize;
+        weapon.totalAmmo = weapon.magSize * 10;
+    });
 
     initScene();
-    initPhysics();
     initAudioSystem();
-    createBuilding(1);
     updateHUD();
+    spawnDrones();
     animate();
+
+    console.log('Game started!');
 }
 
 // Make startGame available globally
