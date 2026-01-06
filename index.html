@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>드론 슈팅 게임 - Drone Hunter 3D</title>
+    <title>드론 헌터 3D - 현실적 드론 슈팅 게임</title>
     <style>
         * {
             margin: 0;
@@ -12,7 +12,7 @@
         }
 
         body {
-            font-family: 'Arial', sans-serif;
+            font-family: 'Orbitron', 'Arial', sans-serif;
             overflow: hidden;
             background: #000;
         }
@@ -21,7 +21,7 @@
             display: block;
             width: 100vw;
             height: 100vh;
-            cursor: crosshair;
+            cursor: none;
         }
 
         #ui {
@@ -34,59 +34,120 @@
             z-index: 10;
         }
 
+        /* HUD - Top Left */
         #hud {
             position: absolute;
             top: 20px;
             left: 20px;
             color: white;
-            font-size: 18px;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
             pointer-events: none;
         }
 
         #stats {
-            background: rgba(0,0,0,0.8);
-            padding: 15px 25px;
-            border-radius: 10px;
-            border: 2px solid #00ff00;
+            background: linear-gradient(135deg, rgba(0,20,40,0.95), rgba(0,40,80,0.95));
+            padding: 20px;
+            border-radius: 15px;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 20px rgba(0,255,255,0.3);
+            min-width: 280px;
         }
 
         .stat-line {
-            margin: 5px 0;
+            margin: 8px 0;
             display: flex;
             justify-content: space-between;
-            min-width: 250px;
+            font-size: 16px;
         }
 
         .stat-label {
-            color: #00ff00;
+            color: #00ffff;
             margin-right: 15px;
+            font-weight: bold;
         }
 
         .stat-value {
             color: #ffffff;
             font-weight: bold;
+            text-align: right;
         }
 
+        /* Health Bar */
+        #healthBarContainer {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 400px;
+        }
+
+        #healthBar {
+            width: 100%;
+            height: 30px;
+            background: rgba(0,0,0,0.8);
+            border-radius: 15px;
+            border: 2px solid #00ffff;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,255,255,0.3);
+        }
+
+        #healthFill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff0000, #00ff00);
+            width: 100%;
+            transition: width 0.3s, background 0.3s;
+            box-shadow: 0 0 10px rgba(0,255,0,0.5);
+        }
+
+        #healthText {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+
+        /* Weapon Info - Bottom Right */
         #weaponInfo {
             position: absolute;
             bottom: 20px;
             right: 20px;
-            background: rgba(0,0,0,0.8);
-            padding: 15px 25px;
-            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(40,20,0,0.95), rgba(80,40,0,0.95));
+            padding: 20px 30px;
+            border-radius: 15px;
             border: 2px solid #ff6600;
             color: white;
             pointer-events: none;
+            box-shadow: 0 0 20px rgba(255,102,0,0.3);
+        }
+
+        #weaponInfo .weapon-title {
+            font-size: 22px;
+            margin-bottom: 10px;
+            color: #ffaa00;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        #weaponInfo .ammo-display {
+            font-size: 32px;
+            margin: 10px 0;
+            color: #ffcc00;
+            font-weight: bold;
+            text-align: center;
         }
 
         #ammoBar {
             width: 200px;
-            height: 20px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 10px;
-            margin-top: 10px;
+            height: 25px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 12px;
             overflow: hidden;
+            margin: 10px 0;
+            border: 2px solid #ff6600;
         }
 
         #ammoFill {
@@ -94,26 +155,30 @@
             background: linear-gradient(90deg, #ff6600, #ffaa00);
             width: 100%;
             transition: width 0.3s;
+            box-shadow: 0 0 10px rgba(255,102,0,0.5);
         }
 
+        /* Advanced Crosshair */
         #crosshair {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 60px;
-            height: 60px;
+            width: 80px;
+            height: 80px;
             pointer-events: none;
+            transition: all 0.1s;
         }
 
         .crosshair-part {
             position: absolute;
-            background: rgba(255, 0, 0, 0.8);
+            background: rgba(0, 255, 255, 0.9);
+            box-shadow: 0 0 5px rgba(0,255,255,0.8);
         }
 
         .crosshair-top {
             width: 2px;
-            height: 15px;
+            height: 20px;
             top: 0;
             left: 50%;
             transform: translateX(-50%);
@@ -121,14 +186,14 @@
 
         .crosshair-bottom {
             width: 2px;
-            height: 15px;
+            height: 20px;
             bottom: 0;
             left: 50%;
             transform: translateX(-50%);
         }
 
         .crosshair-left {
-            width: 15px;
+            width: 20px;
             height: 2px;
             left: 0;
             top: 50%;
@@ -136,7 +201,7 @@
         }
 
         .crosshair-right {
-            width: 15px;
+            width: 20px;
             height: 2px;
             right: 0;
             top: 50%;
@@ -144,14 +209,196 @@
         }
 
         .crosshair-center {
-            width: 4px;
-            height: 4px;
+            width: 6px;
+            height: 6px;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             border-radius: 50%;
+            background: rgba(255, 0, 0, 0.8);
+            box-shadow: 0 0 5px rgba(255,0,0,0.8);
         }
 
+        #crosshair.firing {
+            transform: translate(-50%, -50%) scale(1.3);
+        }
+
+        /* Hit Marker */
+        #hitMarker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+
+        .hit-line {
+            position: absolute;
+            background: #ff0000;
+            width: 30px;
+            height: 4px;
+            box-shadow: 0 0 10px rgba(255,0,0,0.8);
+        }
+
+        .hit-line1 {
+            top: 25px;
+            left: 25px;
+            transform: rotate(45deg);
+        }
+
+        .hit-line2 {
+            top: 25px;
+            right: 25px;
+            transform: rotate(-45deg);
+        }
+
+        .hit-line3 {
+            bottom: 25px;
+            left: 25px;
+            transform: rotate(-45deg);
+        }
+
+        .hit-line4 {
+            bottom: 25px;
+            right: 25px;
+            transform: rotate(45deg);
+        }
+
+        #hitMarker.show {
+            opacity: 1;
+        }
+
+        /* Kill Feed */
+        #killFeed {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 350px;
+            max-height: 500px;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .kill-message {
+            background: linear-gradient(90deg, rgba(255,102,0,0.95), rgba(255,153,0,0.95));
+            color: white;
+            padding: 12px 20px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-out 3s forwards;
+            font-weight: bold;
+            text-align: center;
+            border: 2px solid #ffaa00;
+            box-shadow: 0 4px 10px rgba(255,102,0,0.4);
+            font-size: 16px;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+        }
+
+        /* Wave Indicator */
+        #waveIndicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 72px;
+            color: #00ffff;
+            text-shadow: 0 0 30px rgba(0,255,255,0.8);
+            opacity: 0;
+            pointer-events: none;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        #waveIndicator.show {
+            animation: waveAnim 3s ease-out forwards;
+        }
+
+        @keyframes waveAnim {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.2);
+            }
+            80% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+        }
+
+        /* Reload Indicator */
+        #reloadIndicator {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff6600;
+            font-size: 28px;
+            font-weight: bold;
+            opacity: 0;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.7);
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: 2px solid #ff6600;
+        }
+
+        #reloadIndicator.show {
+            opacity: 1;
+            animation: pulse 0.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.1); }
+        }
+
+        /* Damage Vignette */
+        #damageVignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, transparent 40%, rgba(255,0,0,0) 60%, rgba(255,0,0,0.5) 100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        #damageVignette.show {
+            opacity: 1;
+        }
+
+        /* Start Screen */
         #startScreen {
             position: absolute;
             top: 0;
@@ -169,186 +416,228 @@
         }
 
         #startScreen h1 {
-            font-size: 56px;
-            margin-bottom: 15px;
-            color: #ff6600;
-            text-shadow: 0 0 20px rgba(255, 102, 0, 0.8);
-            letter-spacing: 3px;
+            font-size: 72px;
+            margin-bottom: 20px;
+            color: #00ffff;
+            text-shadow: 0 0 30px rgba(0,255,255,0.8);
+            letter-spacing: 5px;
+            animation: glow 2s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { text-shadow: 0 0 30px rgba(0,255,255,0.8); }
+            50% { text-shadow: 0 0 50px rgba(0,255,255,1); }
         }
 
         #startScreen h2 {
-            font-size: 28px;
-            margin-bottom: 30px;
-            color: #00ff00;
-            text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+            font-size: 32px;
+            margin-bottom: 40px;
+            color: #ff6600;
+            text-shadow: 0 0 20px rgba(255,102,0,0.6);
         }
 
         #startScreen p {
-            font-size: 18px;
-            margin-bottom: 30px;
-            max-width: 600px;
+            font-size: 20px;
+            margin-bottom: 40px;
+            max-width: 700px;
             text-align: center;
             line-height: 1.8;
             color: #cccccc;
         }
 
         .btn {
-            padding: 18px 50px;
-            font-size: 22px;
-            background: linear-gradient(135deg, #ff6600 0%, #ff9900 100%);
-            color: white;
-            border: 2px solid #ffaa00;
-            border-radius: 10px;
+            padding: 20px 60px;
+            font-size: 24px;
+            background: linear-gradient(135deg, #00ffff 0%, #00aaff 100%);
+            color: #000;
+            border: 3px solid #00ffff;
+            border-radius: 15px;
             cursor: pointer;
             pointer-events: all;
             transition: all 0.3s;
-            margin: 10px;
+            margin: 15px;
             text-transform: uppercase;
             font-weight: bold;
-            box-shadow: 0 5px 20px rgba(255, 102, 0, 0.4);
+            box-shadow: 0 5px 25px rgba(0,255,255,0.4);
         }
 
         .btn:hover {
             transform: scale(1.1) translateY(-5px);
-            box-shadow: 0 10px 30px rgba(255, 102, 0, 0.8);
+            box-shadow: 0 10px 40px rgba(0,255,255,0.8);
+            background: linear-gradient(135deg, #00ffff 0%, #0088ff 100%);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #ff6600 0%, #ff9900 100%);
+            border-color: #ff6600;
+            box-shadow: 0 5px 25px rgba(255,102,0,0.4);
+        }
+
+        .btn-secondary:hover {
             background: linear-gradient(135deg, #ff9900 0%, #ffcc00 100%);
+            box-shadow: 0 10px 40px rgba(255,102,0,0.8);
         }
 
         #instructions {
-            margin-top: 40px;
+            margin-top: 50px;
             font-size: 16px;
             text-align: left;
             background: rgba(255,255,255,0.05);
-            padding: 25px;
-            border-radius: 15px;
-            border: 1px solid rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 20px;
+            border: 2px solid rgba(0,255,255,0.3);
             backdrop-filter: blur(10px);
+            max-width: 900px;
         }
 
         .instruction-section {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
 
         .instruction-title {
-            color: #ff6600;
-            font-size: 18px;
-            margin-bottom: 10px;
+            color: #00ffff;
+            font-size: 20px;
+            margin-bottom: 12px;
             font-weight: bold;
         }
 
         .instruction-item {
-            margin: 8px 0;
-            padding-left: 20px;
+            margin: 10px 0;
+            padding-left: 25px;
             color: #dddddd;
+            line-height: 1.6;
         }
 
-        #hitMarker {
+        /* Pause Menu */
+        #pauseMenu {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 80px;
-            height: 80px;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.1s;
-        }
-
-        .hit-line {
-            position: absolute;
-            background: #ff0000;
-            width: 20px;
-            height: 3px;
-        }
-
-        .hit-line1 {
-            top: 20px;
-            left: 20px;
-            transform: rotate(45deg);
-        }
-
-        .hit-line2 {
-            top: 20px;
-            right: 20px;
-            transform: rotate(-45deg);
-        }
-
-        .hit-line3 {
-            bottom: 20px;
-            left: 20px;
-            transform: rotate(-45deg);
-        }
-
-        .hit-line4 {
-            bottom: 20px;
-            right: 20px;
-            transform: rotate(45deg);
-        }
-
-        #hitMarker.show {
-            opacity: 1;
-        }
-
-        #killFeed {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 300px;
-            max-height: 400px;
-            overflow: hidden;
-            pointer-events: none;
-        }
-
-        .kill-message {
-            background: rgba(255, 102, 0, 0.9);
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             color: white;
-            padding: 10px 15px;
-            margin-bottom: 5px;
-            border-radius: 5px;
-            animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-out 2.5s forwards;
-            font-weight: bold;
-            text-align: center;
-            border: 1px solid #ffaa00;
+            pointer-events: all;
+            z-index: 200;
         }
 
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
+        #pauseMenu.show {
+            display: flex;
         }
 
-        @keyframes fadeOut {
-            to {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
+        #pauseMenu h1 {
+            font-size: 64px;
+            margin-bottom: 40px;
+            color: #00ffff;
+            text-shadow: 0 0 30px rgba(0,255,255,0.8);
         }
 
-        #reloadIndicator {
+        /* Game Over Screen */
+        #gameOverScreen {
             position: absolute;
-            bottom: 80px;
-            right: 20px;
-            color: #ff6600;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            pointer-events: all;
+            z-index: 300;
+        }
+
+        #gameOverScreen.show {
+            display: flex;
+        }
+
+        #gameOverScreen h1 {
+            font-size: 72px;
+            margin-bottom: 30px;
+            color: #ff0000;
+            text-shadow: 0 0 30px rgba(255,0,0,0.8);
+        }
+
+        #finalStats {
             font-size: 24px;
+            margin: 30px 0;
+            text-align: center;
+            line-height: 2;
+            background: rgba(255,255,255,0.05);
+            padding: 40px;
+            border-radius: 20px;
+            border: 2px solid rgba(255,0,0,0.3);
+        }
+
+        .final-stat {
+            margin: 15px 0;
+            color: #00ffff;
+        }
+
+        .final-stat span {
+            color: #ffaa00;
             font-weight: bold;
+        }
+
+        /* Power-up notification */
+        #powerupNotification {
+            position: absolute;
+            top: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            color: #00ff00;
+            text-shadow: 0 0 20px rgba(0,255,0,0.8);
             opacity: 0;
             pointer-events: none;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            font-weight: bold;
+            background: rgba(0,0,0,0.8);
+            padding: 15px 30px;
+            border-radius: 10px;
+            border: 2px solid #00ff00;
         }
 
-        #reloadIndicator.show {
-            opacity: 1;
-            animation: pulse 0.5s ease-in-out infinite;
+        #powerupNotification.show {
+            animation: powerupAnim 2s ease-out forwards;
         }
 
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+        @keyframes powerupAnim {
+            0% {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            20% {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+            80% {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+        }
+
+        /* Low health warning */
+        .low-health {
+            animation: healthWarning 1s ease-in-out infinite !important;
+        }
+
+        @keyframes healthWarning {
+            0%, 100% {
+                background: linear-gradient(90deg, #ff0000, #880000);
+            }
+            50% {
+                background: linear-gradient(90deg, #880000, #ff0000);
+            }
         }
     </style>
 </head>
@@ -356,6 +645,7 @@
     <canvas id="gameCanvas"></canvas>
 
     <div id="ui">
+        <!-- HUD -->
         <div id="hud">
             <div id="stats">
                 <div class="stat-line">
@@ -367,8 +657,8 @@
                     <span class="stat-value" id="kills">0</span>
                 </div>
                 <div class="stat-line">
-                    <span class="stat-label">🎚️ 레벨:</span>
-                    <span class="stat-value" id="level">1</span>
+                    <span class="stat-label">🌊 웨이브:</span>
+                    <span class="stat-value" id="wave">1</span>
                 </div>
                 <div class="stat-line">
                     <span class="stat-label">⚡ 콤보:</span>
@@ -381,25 +671,30 @@
             </div>
         </div>
 
-        <div id="weaponInfo">
-            <div style="font-size: 20px; margin-bottom: 10px;">
-                <span style="color: #ff6600;">⚔️ 무기:</span>
-                <span id="weaponName" style="color: #ffaa00; font-weight: bold;">자동 소총</span>
-            </div>
-            <div style="font-size: 16px; margin-bottom: 5px;">
-                <span>탄약:</span>
-                <span id="ammo" style="color: #ffaa00; font-weight: bold;">30/300</span>
-            </div>
-            <div id="ammoBar">
-                <div id="ammoFill"></div>
-            </div>
-            <div style="margin-top: 15px; font-size: 14px; color: #cccccc;">
-                <div>[클릭] 발사</div>
-                <div>[R] 재장전</div>
-                <div>[1-3] 무기 변경</div>
+        <!-- Health Bar -->
+        <div id="healthBarContainer">
+            <div id="healthBar">
+                <div id="healthFill"></div>
+                <div id="healthText">100 / 100</div>
             </div>
         </div>
 
+        <!-- Weapon Info -->
+        <div id="weaponInfo">
+            <div class="weapon-title">
+                <span id="weaponName">자동 소총</span>
+            </div>
+            <div class="ammo-display" id="ammo">30/300</div>
+            <div id="ammoBar">
+                <div id="ammoFill"></div>
+            </div>
+            <div style="margin-top: 15px; font-size: 14px; color: #cccccc; text-align: center;">
+                <div>[클릭] 발사 | [R] 재장전</div>
+                <div>[1-3] 무기 변경 | [ESC] 일시정지</div>
+            </div>
+        </div>
+
+        <!-- Crosshair -->
         <div id="crosshair">
             <div class="crosshair-part crosshair-top"></div>
             <div class="crosshair-part crosshair-bottom"></div>
@@ -408,6 +703,7 @@
             <div class="crosshair-part crosshair-center"></div>
         </div>
 
+        <!-- Hit Marker -->
         <div id="hitMarker">
             <div class="hit-line hit-line1"></div>
             <div class="hit-line hit-line2"></div>
@@ -415,47 +711,87 @@
             <div class="hit-line hit-line4"></div>
         </div>
 
+        <!-- Kill Feed -->
         <div id="killFeed"></div>
 
+        <!-- Wave Indicator -->
+        <div id="waveIndicator"></div>
+
+        <!-- Reload Indicator -->
         <div id="reloadIndicator">재장전 중...</div>
+
+        <!-- Damage Vignette -->
+        <div id="damageVignette"></div>
+
+        <!-- Power-up Notification -->
+        <div id="powerupNotification"></div>
     </div>
 
+    <!-- Start Screen -->
     <div id="startScreen">
         <h1>🚁 DRONE HUNTER 3D 🎯</h1>
-        <h2>전술 드론 격추 시뮬레이터</h2>
+        <h2>차세대 전술 드론 격추 시뮬레이터</h2>
         <p>
-            하늘을 지배하는 적 드론을 격추하세요!<br>
-            다양한 무기로 빠르게 움직이는 드론을 명중시키고<br>
-            최고의 드론 헌터가 되어보세요!
+            최첨단 AI 드론들이 하늘을 지배하고 있습니다!<br>
+            다양한 무기를 사용하여 드론을 격추하고,<br>
+            웨이브를 견뎌내며 최고의 드론 헌터가 되어보세요!<br>
+            <strong>⚠️ 일부 드론은 당신을 공격합니다. 조심하세요!</strong>
         </p>
         <button class="btn" onclick="startGame()">🎮 게임 시작</button>
 
         <div id="instructions">
             <div class="instruction-section">
                 <div class="instruction-title">🎮 조작법</div>
-                <div class="instruction-item">• 마우스 이동: 조준</div>
-                <div class="instruction-item">• 마우스 클릭: 발사</div>
-                <div class="instruction-item">• R 키: 재장전</div>
-                <div class="instruction-item">• 1 키: 자동 소총 (빠른 연사, 보통 위력)</div>
-                <div class="instruction-item">• 2 키: 저격 소총 (느린 연사, 높은 위력)</div>
-                <div class="instruction-item">• 3 키: 산탄총 (산탄, 근거리 고위력)</div>
+                <div class="instruction-item">• <strong>마우스 이동:</strong> 조준 및 시야 회전</div>
+                <div class="instruction-item">• <strong>마우스 클릭:</strong> 발사</div>
+                <div class="instruction-item">• <strong>R 키:</strong> 재장전</div>
+                <div class="instruction-item">• <strong>1 키:</strong> 자동 소총 (빠른 연사, 보통 위력)</div>
+                <div class="instruction-item">• <strong>2 키:</strong> 저격 소총 (느린 연사, 높은 위력)</div>
+                <div class="instruction-item">• <strong>3 키:</strong> 산탄총 (산탄 발사, 근거리 특화)</div>
+                <div class="instruction-item">• <strong>ESC 키:</strong> 일시정지</div>
             </div>
 
             <div class="instruction-section">
-                <div class="instruction-title">🎯 게임 목표</div>
-                <div class="instruction-item">• 빠르게 움직이는 드론을 격추하세요</div>
-                <div class="instruction-item">• 연속 격추로 콤보를 쌓으세요</div>
-                <div class="instruction-item">• 높은 정확도를 유지하세요</div>
-                <div class="instruction-item">• 레벨이 올라갈수록 드론이 더 빠르고 많아집니다</div>
+                <div class="instruction-title">🎯 게임 시스템</div>
+                <div class="instruction-item">• <strong>웨이브 시스템:</strong> 3 웨이브마다 보스 드론 등장</div>
+                <div class="instruction-item">• <strong>드론 종류:</strong> Scout(빠름), Fighter(공격), Heavy(강력), Boss(최강)</div>
+                <div class="instruction-item">• <strong>공격 드론:</strong> 빨간색 드론은 당신을 공격합니다!</div>
+                <div class="instruction-item">• <strong>체력 시스템:</strong> 체력이 0이 되면 게임 오버</div>
+                <div class="instruction-item">• <strong>파워업:</strong> 녹색 구체는 체력 회복, 노란색은 탄약 보급</div>
+                <div class="instruction-item">• <strong>콤보 보너스:</strong> 연속 격추로 점수 배율 증가</div>
             </div>
 
             <div class="instruction-section">
                 <div class="instruction-title">🏆 점수 시스템</div>
-                <div class="instruction-item">• 기본 격추: 100점</div>
-                <div class="instruction-item">• 콤보 보너스: 연속 격추마다 추가 점수</div>
-                <div class="instruction-item">• 정확도 보너스: 높은 명중률에 보너스</div>
+                <div class="instruction-item">• Scout 드론: 100점</div>
+                <div class="instruction-item">• Fighter 드론: 200점</div>
+                <div class="instruction-item">• Heavy 드론: 300점</div>
+                <div class="instruction-item">• Boss 드론: 1000점</div>
+                <div class="instruction-item">• 콤보 배율 적용 + 정확도 보너스</div>
             </div>
         </div>
+    </div>
+
+    <!-- Pause Menu -->
+    <div id="pauseMenu">
+        <h1>⏸️ 일시정지</h1>
+        <button class="btn" onclick="resumeGame()">계속하기</button>
+        <button class="btn btn-secondary" onclick="restartGame()">다시 시작</button>
+        <button class="btn btn-secondary" onclick="quitToMenu()">메인 메뉴</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen">
+        <h1>💀 게임 오버</h1>
+        <div id="finalStats">
+            <div class="final-stat">최종 점수: <span id="finalScore">0</span></div>
+            <div class="final-stat">총 격추: <span id="finalKills">0</span></div>
+            <div class="final-stat">도달 웨이브: <span id="finalWave">1</span></div>
+            <div class="final-stat">최고 콤보: <span id="finalCombo">0</span></div>
+            <div class="final-stat">정확도: <span id="finalAccuracy">0</span>%</div>
+        </div>
+        <button class="btn" onclick="restartGame()">다시 도전</button>
+        <button class="btn btn-secondary" onclick="quitToMenu()">메인 메뉴</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
