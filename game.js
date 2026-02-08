@@ -73,6 +73,8 @@ let scene, camera, renderer;
 let clock, delta;
 let raycaster, mouse;
 let gunModel;
+let animationRunning = false;
+let crashingDrones = [];
 
 // Audio Context
 let audioContext;
@@ -92,7 +94,7 @@ const droneTypes = {
     scout: {
         health: 60,
         speed: 1.2,
-        size: 1,
+        size: 3,
         color: 0x00ff00,
         points: 100,
         aggressive: false
@@ -100,7 +102,7 @@ const droneTypes = {
     fighter: {
         health: 120,
         speed: 1.5,
-        size: 1.4,
+        size: 4,
         color: 0xff0000,
         points: 200,
         aggressive: true,
@@ -110,7 +112,7 @@ const droneTypes = {
     heavy: {
         health: 250,
         speed: 0.7,
-        size: 2,
+        size: 5.5,
         color: 0xff6600,
         points: 300,
         aggressive: false
@@ -118,7 +120,7 @@ const droneTypes = {
     boss: {
         health: 1000,
         speed: 0.8,
-        size: 3,
+        size: 8,
         color: 0xff00ff,
         points: 1000,
         aggressive: true,
@@ -423,166 +425,247 @@ function playBackgroundAmbient() {
     playAmbient();
 }
 
+// Helper: create noise buffer
+function createNoiseBuffer(duration) {
+    const bufferSize = Math.floor(audioContext.sampleRate * duration);
+    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+    return buffer;
+}
+
 function playRifleSound() {
     if (!audioContext) return;
     const now = audioContext.currentTime;
 
-    const osc1 = audioContext.createOscillator();
-    const gain1 = audioContext.createGain();
-    osc1.type = 'square';
-    osc1.frequency.setValueAtTime(500, now);
-    osc1.frequency.exponentialRampToValueAtTime(120, now + 0.08);
-    gain1.gain.setValueAtTime(0.8, now);
-    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-    osc1.connect(gain1);
-    gain1.connect(masterGain);
-    osc1.start(now);
-    osc1.stop(now + 0.08);
+    // 1) Sharp crack - filtered white noise burst
+    const crack = audioContext.createBufferSource();
+    crack.buffer = createNoiseBuffer(0.08);
+    const crackFilter = audioContext.createBiquadFilter();
+    crackFilter.type = 'bandpass';
+    crackFilter.frequency.value = 3000;
+    crackFilter.Q.value = 0.8;
+    const crackGain = audioContext.createGain();
+    crackGain.gain.setValueAtTime(1.0, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+    crack.connect(crackFilter);
+    crackFilter.connect(crackGain);
+    crackGain.connect(masterGain);
+    crack.start(now);
 
-    const osc2 = audioContext.createOscillator();
-    const gain2 = audioContext.createGain();
-    osc2.frequency.value = 1200;
-    gain2.gain.setValueAtTime(0.6, now);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
-    osc2.connect(gain2);
-    gain2.connect(masterGain);
-    osc2.start(now);
-    osc2.stop(now + 0.04);
+    // 2) Low body thump
+    const body = audioContext.createOscillator();
+    body.type = 'sine';
+    body.frequency.setValueAtTime(180, now);
+    body.frequency.exponentialRampToValueAtTime(40, now + 0.12);
+    const bodyGain = audioContext.createGain();
+    bodyGain.gain.setValueAtTime(0.9, now);
+    bodyGain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+    body.connect(bodyGain);
+    bodyGain.connect(masterGain);
+    body.start(now);
+    body.stop(now + 0.12);
 
-    // Additional low-frequency punch
-    const osc3 = audioContext.createOscillator();
-    const gain3 = audioContext.createGain();
-    osc3.type = 'sine';
-    osc3.frequency.setValueAtTime(150, now);
-    osc3.frequency.exponentialRampToValueAtTime(60, now + 0.1);
-    gain3.gain.setValueAtTime(0.5, now);
-    gain3.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-    osc3.connect(gain3);
-    gain3.connect(masterGain);
-    osc3.start(now);
-    osc3.stop(now + 0.1);
+    // 3) Mechanical click
+    const click = audioContext.createBufferSource();
+    click.buffer = createNoiseBuffer(0.02);
+    const clickFilter = audioContext.createBiquadFilter();
+    clickFilter.type = 'highpass';
+    clickFilter.frequency.value = 5000;
+    const clickGain = audioContext.createGain();
+    clickGain.gain.setValueAtTime(0.4, now + 0.02);
+    clickGain.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
+    click.connect(clickFilter);
+    clickFilter.connect(clickGain);
+    clickGain.connect(masterGain);
+    click.start(now + 0.02);
 }
 
 function playSniperSound() {
     if (!audioContext) return;
     const now = audioContext.currentTime;
 
-    const osc1 = audioContext.createOscillator();
-    const gain1 = audioContext.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(90, now);
-    osc1.frequency.exponentialRampToValueAtTime(35, now + 0.5);
-    gain1.gain.setValueAtTime(1.0, now);
-    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-    osc1.connect(gain1);
-    gain1.connect(masterGain);
-    osc1.start(now);
-    osc1.stop(now + 0.5);
+    // 1) Heavy impact crack - wide band noise
+    const crack = audioContext.createBufferSource();
+    crack.buffer = createNoiseBuffer(0.15);
+    const crackFilter = audioContext.createBiquadFilter();
+    crackFilter.type = 'bandpass';
+    crackFilter.frequency.setValueAtTime(2500, now);
+    crackFilter.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+    crackFilter.Q.value = 0.5;
+    const crackGain = audioContext.createGain();
+    crackGain.gain.setValueAtTime(1.0, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    crack.connect(crackFilter);
+    crackFilter.connect(crackGain);
+    crackGain.connect(masterGain);
+    crack.start(now);
 
-    const osc2 = audioContext.createOscillator();
-    const gain2 = audioContext.createGain();
-    osc2.type = 'square';
-    osc2.frequency.setValueAtTime(700, now);
-    osc2.frequency.exponentialRampToValueAtTime(180, now + 0.2);
-    gain2.gain.setValueAtTime(0.8, now);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-    osc2.connect(gain2);
-    gain2.connect(masterGain);
-    osc2.start(now);
-    osc2.stop(now + 0.2);
+    // 2) Deep bass boom
+    const bass = audioContext.createOscillator();
+    bass.type = 'sine';
+    bass.frequency.setValueAtTime(100, now);
+    bass.frequency.exponentialRampToValueAtTime(25, now + 0.6);
+    const bassGain = audioContext.createGain();
+    bassGain.gain.setValueAtTime(1.0, now);
+    bassGain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+    bass.connect(bassGain);
+    bassGain.connect(masterGain);
+    bass.start(now);
+    bass.stop(now + 0.6);
 
-    // Echo/reverb-like tail
-    const osc3 = audioContext.createOscillator();
-    const gain3 = audioContext.createGain();
-    osc3.type = 'sine';
-    osc3.frequency.setValueAtTime(60, now + 0.15);
-    osc3.frequency.exponentialRampToValueAtTime(25, now + 0.8);
-    gain3.gain.setValueAtTime(0.4, now + 0.15);
-    gain3.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-    osc3.connect(gain3);
-    gain3.connect(masterGain);
-    osc3.start(now + 0.15);
-    osc3.stop(now + 0.8);
+    // 3) Echo tail - reverb-like delay
+    const echo = audioContext.createBufferSource();
+    echo.buffer = createNoiseBuffer(0.4);
+    const echoFilter = audioContext.createBiquadFilter();
+    echoFilter.type = 'lowpass';
+    echoFilter.frequency.value = 600;
+    const echoGain = audioContext.createGain();
+    echoGain.gain.setValueAtTime(0.0, now);
+    echoGain.gain.setValueAtTime(0.25, now + 0.08);
+    echoGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    echo.connect(echoFilter);
+    echoFilter.connect(echoGain);
+    echoGain.connect(masterGain);
+    echo.start(now + 0.08);
+
+    // 4) Supersonic whip-crack
+    const whip = audioContext.createOscillator();
+    whip.type = 'sawtooth';
+    whip.frequency.setValueAtTime(4000, now);
+    whip.frequency.exponentialRampToValueAtTime(500, now + 0.03);
+    const whipGain = audioContext.createGain();
+    whipGain.gain.setValueAtTime(0.5, now);
+    whipGain.gain.exponentialRampToValueAtTime(0.01, now + 0.03);
+    whip.connect(whipGain);
+    whipGain.connect(masterGain);
+    whip.start(now);
+    whip.stop(now + 0.03);
 }
 
 function playShotgunSound() {
     if (!audioContext) return;
     const now = audioContext.currentTime;
 
-    const osc1 = audioContext.createOscillator();
-    const gain1 = audioContext.createGain();
-    osc1.type = 'sawtooth';
-    osc1.frequency.setValueAtTime(140, now);
-    osc1.frequency.exponentialRampToValueAtTime(45, now + 0.5);
-    gain1.gain.setValueAtTime(1.0, now);
-    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-    osc1.connect(gain1);
-    gain1.connect(masterGain);
-    osc1.start(now);
-    osc1.stop(now + 0.5);
+    // 1) Massive initial blast - broadband noise
+    const blast = audioContext.createBufferSource();
+    blast.buffer = createNoiseBuffer(0.3);
+    const blastFilter = audioContext.createBiquadFilter();
+    blastFilter.type = 'lowpass';
+    blastFilter.frequency.setValueAtTime(5000, now);
+    blastFilter.frequency.exponentialRampToValueAtTime(400, now + 0.3);
+    const blastGain = audioContext.createGain();
+    blastGain.gain.setValueAtTime(1.0, now);
+    blastGain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+    blast.connect(blastFilter);
+    blastFilter.connect(blastGain);
+    blastGain.connect(masterGain);
+    blast.start(now);
 
-    const bufferSize = audioContext.sampleRate * 0.35;
-    const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-    const noiseData = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-        noiseData[i] = Math.random() * 2 - 1;
-    }
-    const noise = audioContext.createBufferSource();
-    noise.buffer = noiseBuffer;
-    const noiseGain = audioContext.createGain();
-    noiseGain.gain.setValueAtTime(0.7, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-    noise.connect(noiseGain);
-    noiseGain.connect(masterGain);
-    noise.start(now);
+    // 2) Deep bass punch
+    const bass = audioContext.createOscillator();
+    bass.type = 'sine';
+    bass.frequency.setValueAtTime(120, now);
+    bass.frequency.exponentialRampToValueAtTime(30, now + 0.4);
+    const bassGain = audioContext.createGain();
+    bassGain.gain.setValueAtTime(1.0, now);
+    bassGain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    bass.connect(bassGain);
+    bassGain.connect(masterGain);
+    bass.start(now);
+    bass.stop(now + 0.4);
+
+    // 3) High frequency scatter (pellet spread effect)
+    const scatter = audioContext.createBufferSource();
+    scatter.buffer = createNoiseBuffer(0.1);
+    const scatterFilter = audioContext.createBiquadFilter();
+    scatterFilter.type = 'highpass';
+    scatterFilter.frequency.value = 4000;
+    const scatterGain = audioContext.createGain();
+    scatterGain.gain.setValueAtTime(0.6, now);
+    scatterGain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    scatter.connect(scatterFilter);
+    scatterFilter.connect(scatterGain);
+    scatterGain.connect(masterGain);
+    scatter.start(now);
+
+    // 4) Pump action follow-through
+    const pump = audioContext.createBufferSource();
+    pump.buffer = createNoiseBuffer(0.06);
+    const pumpFilter = audioContext.createBiquadFilter();
+    pumpFilter.type = 'bandpass';
+    pumpFilter.frequency.value = 1500;
+    pumpFilter.Q.value = 2;
+    const pumpGain = audioContext.createGain();
+    pumpGain.gain.setValueAtTime(0.3, now + 0.2);
+    pumpGain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+    pump.connect(pumpFilter);
+    pumpFilter.connect(pumpGain);
+    pumpGain.connect(masterGain);
+    pump.start(now + 0.2);
 }
 
 function playExplosionSound(intensity = 1.0) {
     if (!audioContext) return;
     const now = audioContext.currentTime;
 
-    const osc1 = audioContext.createOscillator();
-    const gain1 = audioContext.createGain();
-    osc1.type = 'sawtooth';
-    osc1.frequency.setValueAtTime(110, now);
-    osc1.frequency.exponentialRampToValueAtTime(22, now + 0.7);
-    gain1.gain.setValueAtTime(0.9 * intensity, now);
-    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
-    osc1.connect(gain1);
-    gain1.connect(masterGain);
-    osc1.start(now);
-    osc1.stop(now + 0.7);
+    // 1) Heavy low-freq boom
+    const boom = audioContext.createOscillator();
+    boom.type = 'sine';
+    boom.frequency.setValueAtTime(80, now);
+    boom.frequency.exponentialRampToValueAtTime(15, now + 0.8);
+    const boomGain = audioContext.createGain();
+    boomGain.gain.setValueAtTime(1.0 * intensity, now);
+    boomGain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+    boom.connect(boomGain);
+    boomGain.connect(masterGain);
+    boom.start(now);
+    boom.stop(now + 0.8);
 
-    const osc2 = audioContext.createOscillator();
-    const gain2 = audioContext.createGain();
-    osc2.type = 'square';
-    osc2.frequency.setValueAtTime(280, now);
-    osc2.frequency.exponentialRampToValueAtTime(55, now + 0.45);
-    gain2.gain.setValueAtTime(0.7 * intensity, now);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
-    osc2.connect(gain2);
-    gain2.connect(masterGain);
-    osc2.start(now);
-    osc2.stop(now + 0.45);
+    // 2) Broadband blast noise
+    const blast = audioContext.createBufferSource();
+    blast.buffer = createNoiseBuffer(0.8);
+    const blastFilter = audioContext.createBiquadFilter();
+    blastFilter.type = 'lowpass';
+    blastFilter.frequency.setValueAtTime(3000, now);
+    blastFilter.frequency.exponentialRampToValueAtTime(200, now + 0.8);
+    const blastGain = audioContext.createGain();
+    blastGain.gain.setValueAtTime(0.8 * intensity, now);
+    blastGain.gain.exponentialRampToValueAtTime(0.01, now + 0.7);
+    blast.connect(blastFilter);
+    blastFilter.connect(blastGain);
+    blastGain.connect(masterGain);
+    blast.start(now);
 
-    const bufferSize = audioContext.sampleRate * 0.6;
-    const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-    const noiseData = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-        noiseData[i] = Math.random() * 2 - 1;
-    }
-    const noise = audioContext.createBufferSource();
-    noise.buffer = noiseBuffer;
-    const noiseFilter = audioContext.createBiquadFilter();
-    noiseFilter.type = 'lowpass';
-    noiseFilter.frequency.value = 1200;
-    const noiseGain = audioContext.createGain();
-    noiseGain.gain.setValueAtTime(0.6 * intensity, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
-    noise.connect(noiseFilter);
-    noiseFilter.connect(noiseGain);
-    noiseGain.connect(masterGain);
-    noise.start(now);
+    // 3) Crackle debris sound
+    const debris = audioContext.createBufferSource();
+    debris.buffer = createNoiseBuffer(0.5);
+    const debrisFilter = audioContext.createBiquadFilter();
+    debrisFilter.type = 'highpass';
+    debrisFilter.frequency.value = 2000;
+    const debrisGain = audioContext.createGain();
+    debrisGain.gain.setValueAtTime(0.0, now);
+    debrisGain.gain.setValueAtTime(0.4 * intensity, now + 0.05);
+    debrisGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    debris.connect(debrisFilter);
+    debrisFilter.connect(debrisGain);
+    debrisGain.connect(masterGain);
+    debris.start(now + 0.05);
+
+    // 4) Sub-bass shockwave
+    const sub = audioContext.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(40, now);
+    sub.frequency.exponentialRampToValueAtTime(10, now + 0.4);
+    const subGain = audioContext.createGain();
+    subGain.gain.setValueAtTime(0.7 * intensity, now);
+    subGain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    sub.connect(subGain);
+    subGain.connect(masterGain);
+    sub.start(now);
+    sub.stop(now + 0.4);
 }
 
 function playDroneSound() {
@@ -638,29 +721,46 @@ function playHitSound() {
     if (!audioContext) return;
     const now = audioContext.currentTime;
 
-    const osc = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(500, now);
-    osc.frequency.exponentialRampToValueAtTime(150, now + 0.2);
-    gain.gain.setValueAtTime(0.6, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-    osc.connect(gain);
-    gain.connect(masterGain);
-    osc.start(now);
-    osc.stop(now + 0.2);
+    // Metallic impact ping
+    const ping = audioContext.createOscillator();
+    ping.type = 'sine';
+    ping.frequency.setValueAtTime(2200, now);
+    ping.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+    const pingGain = audioContext.createGain();
+    pingGain.gain.setValueAtTime(0.5, now);
+    pingGain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    ping.connect(pingGain);
+    pingGain.connect(masterGain);
+    ping.start(now);
+    ping.stop(now + 0.08);
 
-    // Metallic ping
-    const osc2 = audioContext.createOscillator();
-    const gain2 = audioContext.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.value = 1800;
-    gain2.gain.setValueAtTime(0.3, now);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-    osc2.connect(gain2);
-    gain2.connect(masterGain);
-    osc2.start(now);
-    osc2.stop(now + 0.08);
+    // Metal crunch noise
+    const crunch = audioContext.createBufferSource();
+    crunch.buffer = createNoiseBuffer(0.06);
+    const crunchFilter = audioContext.createBiquadFilter();
+    crunchFilter.type = 'bandpass';
+    crunchFilter.frequency.value = 3500;
+    crunchFilter.Q.value = 1.5;
+    const crunchGain = audioContext.createGain();
+    crunchGain.gain.setValueAtTime(0.5, now);
+    crunchGain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+    crunch.connect(crunchFilter);
+    crunchFilter.connect(crunchGain);
+    crunchGain.connect(masterGain);
+    crunch.start(now);
+
+    // Satisfying thud
+    const thud = audioContext.createOscillator();
+    thud.type = 'sine';
+    thud.frequency.setValueAtTime(200, now);
+    thud.frequency.exponentialRampToValueAtTime(60, now + 0.1);
+    const thudGain = audioContext.createGain();
+    thudGain.gain.setValueAtTime(0.4, now);
+    thudGain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+    thud.connect(thudGain);
+    thudGain.connect(masterGain);
+    thud.start(now);
+    thud.stop(now + 0.1);
 }
 
 function playPowerupSound() {
@@ -707,6 +807,40 @@ function playDamageSound() {
     gain2.connect(masterGain);
     osc2.start(now);
     osc2.stop(now + 0.15);
+}
+
+function playCrashSound() {
+    if (!audioContext) return;
+    const now = audioContext.currentTime;
+
+    // Metallic tearing/breaking sound
+    const tear = audioContext.createBufferSource();
+    tear.buffer = createNoiseBuffer(0.4);
+    const tearFilter = audioContext.createBiquadFilter();
+    tearFilter.type = 'bandpass';
+    tearFilter.frequency.setValueAtTime(2000, now);
+    tearFilter.frequency.exponentialRampToValueAtTime(500, now + 0.4);
+    tearFilter.Q.value = 1.0;
+    const tearGain = audioContext.createGain();
+    tearGain.gain.setValueAtTime(0.5, now);
+    tearGain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    tear.connect(tearFilter);
+    tearFilter.connect(tearGain);
+    tearGain.connect(masterGain);
+    tear.start(now);
+
+    // Descending whine (engine dying)
+    const whine = audioContext.createOscillator();
+    whine.type = 'sawtooth';
+    whine.frequency.setValueAtTime(800, now);
+    whine.frequency.exponentialRampToValueAtTime(100, now + 0.6);
+    const whineGain = audioContext.createGain();
+    whineGain.gain.setValueAtTime(0.3, now);
+    whineGain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+    whine.connect(whineGain);
+    whineGain.connect(masterGain);
+    whine.start(now);
+    whine.stop(now + 0.6);
 }
 
 // ============================================
@@ -792,36 +926,38 @@ function createDrone(type = 'scout') {
     pointLight.position.set(0, 0, 0);
     droneGroup.add(pointLight);
 
-    // Spawn positioning
+    // Spawn positioning - closer to player for better visibility
     const side = Math.floor(Math.random() * 4);
     let startX, startY, startZ, targetX, targetZ;
 
-    startY = 25 + Math.random() * 40;
+    startY = 15 + Math.random() * 30;
+
+    const spawnDist = 80 + Math.random() * 40;
 
     switch(side) {
         case 0:
-            startX = -180;
-            startZ = Math.random() * 120 - 60;
-            targetX = config.aggressive ? 0 : 180;
-            targetZ = config.aggressive ? 0 : Math.random() * 120 - 60;
+            startX = -spawnDist;
+            startZ = Math.random() * 80 - 40;
+            targetX = config.aggressive ? 0 : spawnDist;
+            targetZ = config.aggressive ? 0 : Math.random() * 80 - 40;
             break;
         case 1:
-            startX = 180;
-            startZ = Math.random() * 120 - 60;
-            targetX = config.aggressive ? 0 : -180;
-            targetZ = config.aggressive ? 0 : Math.random() * 120 - 60;
+            startX = spawnDist;
+            startZ = Math.random() * 80 - 40;
+            targetX = config.aggressive ? 0 : -spawnDist;
+            targetZ = config.aggressive ? 0 : Math.random() * 80 - 40;
             break;
         case 2:
-            startX = Math.random() * 120 - 60;
-            startZ = -180;
-            targetX = config.aggressive ? 0 : Math.random() * 120 - 60;
-            targetZ = config.aggressive ? 0 : 180;
+            startX = Math.random() * 80 - 40;
+            startZ = -spawnDist;
+            targetX = config.aggressive ? 0 : Math.random() * 80 - 40;
+            targetZ = config.aggressive ? 0 : spawnDist;
             break;
         case 3:
-            startX = Math.random() * 120 - 60;
-            startZ = 180;
-            targetX = config.aggressive ? 0 : Math.random() * 120 - 60;
-            targetZ = config.aggressive ? 0 : -180;
+            startX = Math.random() * 80 - 40;
+            startZ = spawnDist;
+            targetX = config.aggressive ? 0 : Math.random() * 80 - 40;
+            targetZ = config.aggressive ? 0 : -spawnDist;
             break;
     }
 
@@ -1273,8 +1409,9 @@ function hitDrone(drone, damage, hitPoint) {
 }
 
 function destroyDrone(drone) {
-    playExplosionSound(drone.size / 2);
-    createExplosion(drone.mesh.position, drone.size);
+    // Small initial hit explosion (sparks)
+    createHitParticles(drone.mesh.position.clone());
+    playHitSound();
 
     // Update score and stats
     const comboMultiplier = 1 + gameState.combo * 0.3;
@@ -1290,15 +1427,17 @@ function destroyDrone(drone) {
 
     // Spawn power-up chance
     if (Math.random() < 0.2) {
-        spawnPowerup(drone.mesh.position);
+        spawnPowerup(drone.mesh.position.clone());
     }
 
-    // Remove drone
-    scene.remove(drone.mesh);
+    // Remove from active drones
     const index = gameState.drones.indexOf(drone);
     if (index > -1) {
         gameState.drones.splice(index, 1);
     }
+
+    // Start crash animation instead of instant removal
+    startDroneCrash(drone);
 
     // Check for wave completion
     if (gameState.drones.length === 0) {
@@ -1312,6 +1451,119 @@ function destroyDrone(drone) {
     }
 
     updateHUD();
+}
+
+function startDroneCrash(drone) {
+    playCrashSound();
+
+    // Change drone appearance to show damage (darken, add fire glow)
+    drone.mesh.traverse(child => {
+        if (child.isMesh && child.material) {
+            child.material = child.material.clone();
+            child.material.emissive = new THREE.Color(0xff4500);
+            child.material.emissiveIntensity = 0.8;
+        }
+    });
+
+    // Add fire light to crashing drone
+    const fireLight = new THREE.PointLight(0xff4500, 3, 30);
+    drone.mesh.add(fireLight);
+
+    const crashData = {
+        mesh: drone.mesh,
+        velocity: new THREE.Vector3(
+            (Math.random() - 0.5) * 8,
+            -2,
+            (Math.random() - 0.5) * 8
+        ),
+        rotationSpeed: new THREE.Vector3(
+            (Math.random() - 0.5) * 6,
+            (Math.random() - 0.5) * 4,
+            (Math.random() - 0.5) * 6
+        ),
+        lifetime: 3.0,
+        size: drone.size,
+        smokeTimer: 0,
+        hasExploded: false
+    };
+
+    crashingDrones.push(crashData);
+}
+
+function updateCrashingDrones(delta) {
+    crashingDrones = crashingDrones.filter(cd => {
+        cd.lifetime -= delta;
+
+        if (cd.lifetime <= 0) {
+            scene.remove(cd.mesh);
+            return false;
+        }
+
+        // Apply gravity
+        cd.velocity.y -= 15 * delta;
+
+        // Move
+        cd.mesh.position.addScaledVector(cd.velocity, delta);
+
+        // Spin
+        cd.mesh.rotation.x += cd.rotationSpeed.x * delta;
+        cd.mesh.rotation.y += cd.rotationSpeed.y * delta;
+        cd.mesh.rotation.z += cd.rotationSpeed.z * delta;
+
+        // Emit smoke trail
+        cd.smokeTimer -= delta;
+        if (cd.smokeTimer <= 0) {
+            cd.smokeTimer = 0.08;
+            createCrashSmoke(cd.mesh.position, cd.size);
+        }
+
+        // Ground impact explosion
+        if (!cd.hasExploded && cd.mesh.position.y < -10) {
+            cd.hasExploded = true;
+            playExplosionSound(cd.size / 2);
+            createExplosion(cd.mesh.position, cd.size);
+            gameState.cameraShake = cd.size * 0.2;
+
+            // Fade out quickly after ground hit
+            cd.lifetime = Math.min(cd.lifetime, 0.3);
+        }
+
+        // Fade out drone opacity
+        if (cd.lifetime < 0.5) {
+            cd.mesh.traverse(child => {
+                if (child.isMesh && child.material && child.material.transparent !== undefined) {
+                    child.material.transparent = true;
+                    child.material.opacity = cd.lifetime / 0.5;
+                }
+            });
+        }
+
+        return true;
+    });
+}
+
+function createCrashSmoke(position, size) {
+    const smokeGeo = new THREE.SphereGeometry(size * 0.3, 6, 6);
+    const smokeMat = new THREE.MeshBasicMaterial({
+        color: Math.random() > 0.5 ? 0x333333 : 0xff4500,
+        transparent: true,
+        opacity: 0.6
+    });
+    const smoke = new THREE.Mesh(smokeGeo, smokeMat);
+    smoke.position.copy(position);
+    scene.add(smoke);
+
+    gameState.particles.push({
+        mesh: smoke,
+        velocity: new THREE.Vector3(
+            (Math.random() - 0.5) * 2,
+            Math.random() * 3 + 1,
+            (Math.random() - 0.5) * 2
+        ),
+        lifetime: 1.5,
+        fadeRate: 0.4,
+        isSmoke: true
+    });
 }
 
 function showHitMarker() {
@@ -1734,14 +1986,26 @@ function restartGame() {
     });
     gameState.explosions.forEach(explosion => scene.remove(explosion.mesh));
     gameState.powerups.forEach(powerup => scene.remove(powerup.mesh));
+    crashingDrones.forEach(cd => scene.remove(cd.mesh));
 
     gameState.drones = [];
     gameState.bullets = [];
     gameState.explosions = [];
     gameState.powerups = [];
+    crashingDrones = [];
+
+    // Keep only cloud particles
+    gameState.particles = gameState.particles.filter(p => p.isCloud);
+
+    // Reset muzzle flashes
+    gameState.muzzleFlashes.forEach(f => camera.remove(f.mesh));
+    gameState.muzzleFlashes = [];
 
     document.getElementById('pauseMenu').classList.remove('show');
     document.getElementById('gameOverScreen').classList.remove('show');
+
+    // Reset clock to prevent stale delta
+    if (clock) clock.getDelta();
 
     // Restart
     startGame();
@@ -1750,6 +2014,10 @@ function restartGame() {
 function quitToMenu() {
     gameState.isPlaying = false;
     gameState.isPaused = false;
+
+    // Clean up crashing drones
+    crashingDrones.forEach(cd => scene.remove(cd.mesh));
+    crashingDrones = [];
 
     document.getElementById('pauseMenu').classList.remove('show');
     document.getElementById('gameOverScreen').classList.remove('show');
@@ -2028,7 +2296,7 @@ function animate() {
 
     if (!gameState.isPlaying || gameState.isPaused) return;
 
-    delta = clock.getDelta();
+    delta = Math.min(clock.getDelta(), 0.1); // Cap delta to prevent huge jumps
 
     updateDrones(delta);
     updateBullets(delta);
@@ -2036,6 +2304,7 @@ function animate() {
     updateExplosions(delta);
     updateMuzzleFlashes(delta);
     updatePowerups(delta);
+    updateCrashingDrones(delta);
     updateComboTimer(delta);
     updateRecoil(delta);
     updateCameraShake(delta);
@@ -2091,9 +2360,26 @@ function startGame() {
         setTimeout(() => trackInd.classList.remove('show'), 3000);
     }
 
+    // Reset camera position
+    camera.position.set(0, 5, 0);
+    camera.rotation.set(0, 0, 0);
+
+    // Reset shooting state
+    gameState.isReloading = false;
+    gameState.canShoot = true;
+    gameState.recoilAmount = 0;
+    gameState.cameraShake = 0;
+    gameState.currentWeapon = 'rifle';
+
     updateHUD();
     spawnWave();
-    animate();
+
+    // Only start animation loop once
+    if (!animationRunning) {
+        animationRunning = true;
+        clock.getDelta(); // Clear stale delta
+        animate();
+    }
 
     document.getElementById('gameCanvas').requestPointerLock();
 }
