@@ -46,18 +46,20 @@
 
         #stats {
             background: linear-gradient(135deg, rgba(0,20,40,0.95), rgba(0,40,80,0.95));
-            padding: 20px;
+            padding: clamp(10px, 2vw, 20px);
             border-radius: 15px;
             border: 2px solid #00ffff;
             box-shadow: 0 0 20px rgba(0,255,255,0.3);
-            min-width: 280px;
+            min-width: 0;
+            max-width: calc(100vw - 40px);
+            width: clamp(180px, 25vw, 280px);
         }
 
         .stat-line {
             margin: 8px 0;
             display: flex;
             justify-content: space-between;
-            font-size: 16px;
+            font-size: clamp(11px, 1.5vw, 16px);
         }
 
         .stat-label {
@@ -75,10 +77,11 @@
         /* Health Bar */
         #healthBarContainer {
             position: absolute;
-            bottom: 100px;
+            bottom: clamp(60px, 10vh, 100px);
             left: 50%;
             transform: translateX(-50%);
-            width: 400px;
+            width: clamp(200px, 40vw, 400px);
+            max-width: calc(100vw - 40px);
         }
 
         #healthBar {
@@ -106,8 +109,9 @@
             transform: translate(-50%, -50%);
             color: white;
             font-weight: bold;
-            font-size: 16px;
+            font-size: clamp(11px, 1.5vw, 16px);
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            white-space: nowrap;
         }
 
         /* Weapon Info - Bottom Right */
@@ -116,16 +120,17 @@
             bottom: 20px;
             right: 20px;
             background: linear-gradient(135deg, rgba(40,20,0,0.95), rgba(80,40,0,0.95));
-            padding: 20px 30px;
+            padding: clamp(10px, 2vw, 20px) clamp(15px, 2.5vw, 30px);
             border-radius: 15px;
             border: 2px solid #ff6600;
             color: white;
             pointer-events: none;
             box-shadow: 0 0 20px rgba(255,102,0,0.3);
+            max-width: calc(50vw - 20px);
         }
 
         #weaponInfo .weapon-title {
-            font-size: 22px;
+            font-size: clamp(14px, 2vw, 22px);
             margin-bottom: 10px;
             color: #ffaa00;
             font-weight: bold;
@@ -133,7 +138,7 @@
         }
 
         #weaponInfo .ammo-display {
-            font-size: 32px;
+            font-size: clamp(20px, 3vw, 32px);
             margin: 10px 0;
             color: #ffcc00;
             font-weight: bold;
@@ -141,7 +146,7 @@
         }
 
         #ammoBar {
-            width: 200px;
+            width: clamp(120px, 18vw, 200px);
             height: 25px;
             background: rgba(0,0,0,0.6);
             border-radius: 12px;
@@ -277,7 +282,8 @@
             position: absolute;
             top: 20px;
             right: 20px;
-            width: 350px;
+            width: clamp(200px, 30vw, 350px);
+            max-width: calc(50vw - 20px);
             max-height: 500px;
             overflow: hidden;
             pointer-events: none;
@@ -286,7 +292,7 @@
         .kill-message {
             background: linear-gradient(90deg, rgba(255,102,0,0.95), rgba(255,153,0,0.95));
             color: white;
-            padding: 12px 20px;
+            padding: clamp(6px, 1vw, 12px) clamp(10px, 1.5vw, 20px);
             margin-bottom: 8px;
             border-radius: 8px;
             animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-out 3s forwards;
@@ -294,7 +300,7 @@
             text-align: center;
             border: 2px solid #ffaa00;
             box-shadow: 0 4px 10px rgba(255,102,0,0.4);
-            font-size: 16px;
+            font-size: clamp(11px, 1.4vw, 16px);
         }
 
         @keyframes slideIn {
@@ -321,13 +327,14 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 72px;
+            font-size: clamp(32px, 8vw, 72px);
             color: #00ffff;
             text-shadow: 0 0 30px rgba(0,255,255,0.8);
             opacity: 0;
             pointer-events: none;
             font-weight: bold;
             text-transform: uppercase;
+            white-space: nowrap;
         }
 
         #waveIndicator.show {
@@ -356,19 +363,20 @@
         /* Reload Indicator */
         #reloadIndicator {
             position: absolute;
-            bottom: 120px;
+            bottom: clamp(80px, 12vh, 120px);
             left: 50%;
             transform: translateX(-50%);
             color: #ff6600;
-            font-size: 28px;
+            font-size: clamp(18px, 3vw, 28px);
             font-weight: bold;
             opacity: 0;
             pointer-events: none;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
             background: rgba(0,0,0,0.7);
-            padding: 15px 30px;
+            padding: clamp(8px, 1.5vw, 15px) clamp(15px, 3vw, 30px);
             border-radius: 10px;
             border: 2px solid #ff6600;
+            white-space: nowrap;
         }
 
         #reloadIndicator.show {
@@ -408,20 +416,24 @@
             background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: flex-start;
             align-items: center;
             color: white;
             pointer-events: all;
             z-index: 100;
+            overflow-y: auto;
+            padding: 20px 0;
         }
 
         #startScreen h1 {
-            font-size: 72px;
+            font-size: clamp(28px, 7vw, 72px);
             margin-bottom: 20px;
             color: #00ffff;
             text-shadow: 0 0 30px rgba(0,255,255,0.8);
-            letter-spacing: 5px;
+            letter-spacing: clamp(2px, 0.5vw, 5px);
             animation: glow 2s ease-in-out infinite;
+            text-align: center;
+            padding: 0 10px;
         }
 
         @keyframes glow {
@@ -430,24 +442,27 @@
         }
 
         #startScreen h2 {
-            font-size: 32px;
+            font-size: clamp(16px, 3.5vw, 32px);
             margin-bottom: 40px;
             color: #ff6600;
             text-shadow: 0 0 20px rgba(255,102,0,0.6);
+            text-align: center;
+            padding: 0 10px;
         }
 
         #startScreen p {
-            font-size: 20px;
+            font-size: clamp(14px, 2vw, 20px);
             margin-bottom: 40px;
-            max-width: 700px;
+            max-width: min(700px, 90vw);
             text-align: center;
             line-height: 1.8;
             color: #cccccc;
+            padding: 0 10px;
         }
 
         .btn {
-            padding: 20px 60px;
-            font-size: 24px;
+            padding: clamp(12px, 2vw, 20px) clamp(30px, 5vw, 60px);
+            font-size: clamp(14px, 2.5vw, 24px);
             background: linear-gradient(135deg, #00ffff 0%, #00aaff 100%);
             color: #000;
             border: 3px solid #00ffff;
@@ -480,14 +495,14 @@
 
         #instructions {
             margin-top: 50px;
-            font-size: 16px;
+            font-size: clamp(12px, 1.5vw, 16px);
             text-align: left;
             background: rgba(255,255,255,0.05);
-            padding: 30px;
+            padding: clamp(15px, 3vw, 30px);
             border-radius: 20px;
             border: 2px solid rgba(0,255,255,0.3);
             backdrop-filter: blur(10px);
-            max-width: 900px;
+            max-width: min(900px, 90vw);
         }
 
         .instruction-section {
@@ -530,7 +545,7 @@
         }
 
         #pauseMenu h1 {
-            font-size: 64px;
+            font-size: clamp(28px, 7vw, 64px);
             margin-bottom: 40px;
             color: #00ffff;
             text-shadow: 0 0 30px rgba(0,255,255,0.8);
@@ -558,21 +573,22 @@
         }
 
         #gameOverScreen h1 {
-            font-size: 72px;
+            font-size: clamp(32px, 8vw, 72px);
             margin-bottom: 30px;
             color: #ff0000;
             text-shadow: 0 0 30px rgba(255,0,0,0.8);
         }
 
         #finalStats {
-            font-size: 24px;
+            font-size: clamp(16px, 2.5vw, 24px);
             margin: 30px 0;
             text-align: center;
             line-height: 2;
             background: rgba(255,255,255,0.05);
-            padding: 40px;
+            padding: clamp(20px, 4vw, 40px);
             border-radius: 20px;
             border: 2px solid rgba(255,0,0,0.3);
+            max-width: 90vw;
         }
 
         .final-stat {
@@ -588,19 +604,21 @@
         /* Power-up notification */
         #powerupNotification {
             position: absolute;
-            top: 120px;
+            top: clamp(60px, 12vh, 120px);
             left: 50%;
             transform: translateX(-50%);
-            font-size: 24px;
+            font-size: clamp(16px, 2.5vw, 24px);
             color: #00ff00;
             text-shadow: 0 0 20px rgba(0,255,0,0.8);
             opacity: 0;
             pointer-events: none;
             font-weight: bold;
             background: rgba(0,0,0,0.8);
-            padding: 15px 30px;
+            padding: clamp(8px, 1.5vw, 15px) clamp(15px, 3vw, 30px);
             border-radius: 10px;
             border: 2px solid #00ff00;
+            white-space: nowrap;
+            max-width: 90vw;
         }
 
         #powerupNotification.show {
@@ -638,6 +656,94 @@
             50% {
                 background: linear-gradient(90deg, #880000, #ff0000);
             }
+        }
+
+        /* Audio indicator */
+        #audioIndicator {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #00ff00;
+            font-size: 14px;
+            pointer-events: none;
+            background: rgba(0,0,0,0.7);
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #00ff00;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        #audioIndicator.show {
+            opacity: 1;
+        }
+
+        /* Auto-tracking indicator */
+        #trackingIndicator {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #00ffff;
+            font-size: 14px;
+            pointer-events: none;
+            background: rgba(0,20,40,0.9);
+            padding: 6px 16px;
+            border-radius: 6px;
+            border: 1px solid #00ffff;
+            opacity: 0;
+            transition: opacity 0.3s;
+            white-space: nowrap;
+        }
+
+        #trackingIndicator.show {
+            opacity: 1;
+        }
+
+        /* Drone direction indicators (off-screen drones) */
+        .drone-arrow {
+            position: absolute;
+            width: 0;
+            height: 0;
+            pointer-events: none;
+            filter: drop-shadow(0 0 4px rgba(255,0,0,0.8));
+            transition: opacity 0.2s;
+        }
+
+        .drone-arrow-left {
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-top: 12px solid transparent;
+            border-bottom: 12px solid transparent;
+            border-right: 20px solid #ff4444;
+        }
+
+        .drone-arrow-right {
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-top: 12px solid transparent;
+            border-bottom: 12px solid transparent;
+            border-left: 20px solid #ff4444;
+        }
+
+        .drone-arrow-top {
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 12px solid transparent;
+            border-right: 12px solid transparent;
+            border-bottom: 20px solid #ff4444;
+        }
+
+        .drone-arrow-bottom {
+            bottom: 140px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 12px solid transparent;
+            border-right: 12px solid transparent;
+            border-top: 20px solid #ff4444;
         }
     </style>
 </head>
@@ -688,9 +794,9 @@
             <div id="ammoBar">
                 <div id="ammoFill"></div>
             </div>
-            <div style="margin-top: 15px; font-size: 14px; color: #cccccc; text-align: center;">
+            <div style="margin-top: 15px; font-size: clamp(10px, 1.3vw, 14px); color: #cccccc; text-align: center;">
                 <div>[클릭] 발사 | [R] 재장전</div>
-                <div>[1-3] 무기 변경 | [ESC] 일시정지</div>
+                <div>[1-3] 무기 변경 | [T] 자동추적</div>
             </div>
         </div>
 
@@ -725,6 +831,18 @@
 
         <!-- Power-up Notification -->
         <div id="powerupNotification"></div>
+
+        <!-- Audio Indicator -->
+        <div id="audioIndicator">🔊 오디오 활성</div>
+
+        <!-- Auto-Tracking Indicator -->
+        <div id="trackingIndicator">🎯 자동 추적 [T]</div>
+
+        <!-- Drone Direction Arrows (off-screen indicators) -->
+        <div id="droneArrowLeft" class="drone-arrow drone-arrow-left" style="opacity:0;"></div>
+        <div id="droneArrowRight" class="drone-arrow drone-arrow-right" style="opacity:0;"></div>
+        <div id="droneArrowTop" class="drone-arrow drone-arrow-top" style="opacity:0;"></div>
+        <div id="droneArrowBottom" class="drone-arrow drone-arrow-bottom" style="opacity:0;"></div>
     </div>
 
     <!-- Start Screen -->
@@ -748,6 +866,7 @@
                 <div class="instruction-item">• <strong>1 키:</strong> 자동 소총 (빠른 연사, 보통 위력)</div>
                 <div class="instruction-item">• <strong>2 키:</strong> 저격 소총 (느린 연사, 높은 위력)</div>
                 <div class="instruction-item">• <strong>3 키:</strong> 산탄총 (산탄 발사, 근거리 특화)</div>
+                <div class="instruction-item">• <strong>T 키:</strong> 자동 추적 ON/OFF (가장 가까운 드론 자동 조준)</div>
                 <div class="instruction-item">• <strong>ESC 키:</strong> 일시정지</div>
             </div>
 
@@ -759,6 +878,7 @@
                 <div class="instruction-item">• <strong>체력 시스템:</strong> 체력이 0이 되면 게임 오버</div>
                 <div class="instruction-item">• <strong>파워업:</strong> 녹색 구체는 체력 회복, 노란색은 탄약 보급</div>
                 <div class="instruction-item">• <strong>콤보 보너스:</strong> 연속 격추로 점수 배율 증가</div>
+                <div class="instruction-item">• <strong>자동 추적:</strong> 가장 가까운 드론을 자동으로 조준 (T키로 ON/OFF)</div>
             </div>
 
             <div class="instruction-section">
