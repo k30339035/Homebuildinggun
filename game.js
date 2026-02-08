@@ -79,6 +79,14 @@ let audioContext;
 let masterGain;
 let backgroundMusicSource;
 
+// Auto-tracking state
+let autoTrackEnabled = true;
+const autoTrackConfig = {
+    smoothSpeed: 3.0,       // How fast camera rotates toward target
+    maxAngle: Math.PI / 3,  // Max angle to consider a drone for tracking (60 degrees)
+    priorityRange: 150,     // Prefer drones within this distance
+};
+
 // Drone configurations by type
 const droneTypes = {
     scout: {
@@ -340,14 +348,50 @@ function initAudioSystem() {
     try {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         masterGain = audioContext.createGain();
-        masterGain.gain.value = 0.4;
+        masterGain.gain.value = 0.7;
         masterGain.connect(audioContext.destination);
+
+        // Resume audio context (required by modern browsers)
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+
+        // Also resume on any user interaction as a fallback
+        const resumeAudio = () => {
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        };
+        document.addEventListener('click', resumeAudio);
+        document.addEventListener('keydown', resumeAudio);
 
         // Start background ambient sound
         playBackgroundAmbient();
+
+        // Play a startup confirmation sound
+        playStartupSound();
     } catch (e) {
         console.warn('Web Audio API not supported', e);
     }
+}
+
+function playStartupSound() {
+    if (!audioContext) return;
+    const now = audioContext.currentTime;
+
+    // A clear ascending chime to confirm audio is working
+    [0, 0.12, 0.24].forEach((time, i) => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 440 * (1 + i * 0.33);
+        gain.gain.setValueAtTime(0.4, now + time);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + time + 0.25);
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.start(now + time);
+        osc.stop(now + time + 0.25);
+    });
 }
 
 function playBackgroundAmbient() {
@@ -387,23 +431,36 @@ function playRifleSound() {
     const gain1 = audioContext.createGain();
     osc1.type = 'square';
     osc1.frequency.setValueAtTime(500, now);
-    osc1.frequency.exponentialRampToValueAtTime(120, now + 0.06);
-    gain1.gain.setValueAtTime(0.5, now);
-    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+    osc1.frequency.exponentialRampToValueAtTime(120, now + 0.08);
+    gain1.gain.setValueAtTime(0.8, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
     osc1.connect(gain1);
     gain1.connect(masterGain);
     osc1.start(now);
-    osc1.stop(now + 0.06);
+    osc1.stop(now + 0.08);
 
     const osc2 = audioContext.createOscillator();
     const gain2 = audioContext.createGain();
     osc2.frequency.value = 1200;
-    gain2.gain.setValueAtTime(0.35, now);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.02);
+    gain2.gain.setValueAtTime(0.6, now);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
     osc2.connect(gain2);
     gain2.connect(masterGain);
     osc2.start(now);
-    osc2.stop(now + 0.02);
+    osc2.stop(now + 0.04);
+
+    // Additional low-frequency punch
+    const osc3 = audioContext.createOscillator();
+    const gain3 = audioContext.createGain();
+    osc3.type = 'sine';
+    osc3.frequency.setValueAtTime(150, now);
+    osc3.frequency.exponentialRampToValueAtTime(60, now + 0.1);
+    gain3.gain.setValueAtTime(0.5, now);
+    gain3.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+    osc3.connect(gain3);
+    gain3.connect(masterGain);
+    osc3.start(now);
+    osc3.stop(now + 0.1);
 }
 
 function playSniperSound() {
@@ -414,25 +471,38 @@ function playSniperSound() {
     const gain1 = audioContext.createGain();
     osc1.type = 'sine';
     osc1.frequency.setValueAtTime(90, now);
-    osc1.frequency.exponentialRampToValueAtTime(35, now + 0.4);
-    gain1.gain.setValueAtTime(0.7, now);
-    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc1.frequency.exponentialRampToValueAtTime(35, now + 0.5);
+    gain1.gain.setValueAtTime(1.0, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
     osc1.connect(gain1);
     gain1.connect(masterGain);
     osc1.start(now);
-    osc1.stop(now + 0.4);
+    osc1.stop(now + 0.5);
 
     const osc2 = audioContext.createOscillator();
     const gain2 = audioContext.createGain();
     osc2.type = 'square';
     osc2.frequency.setValueAtTime(700, now);
-    osc2.frequency.exponentialRampToValueAtTime(180, now + 0.18);
-    gain2.gain.setValueAtTime(0.6, now);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+    osc2.frequency.exponentialRampToValueAtTime(180, now + 0.2);
+    gain2.gain.setValueAtTime(0.8, now);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
     osc2.connect(gain2);
     gain2.connect(masterGain);
     osc2.start(now);
-    osc2.stop(now + 0.18);
+    osc2.stop(now + 0.2);
+
+    // Echo/reverb-like tail
+    const osc3 = audioContext.createOscillator();
+    const gain3 = audioContext.createGain();
+    osc3.type = 'sine';
+    osc3.frequency.setValueAtTime(60, now + 0.15);
+    osc3.frequency.exponentialRampToValueAtTime(25, now + 0.8);
+    gain3.gain.setValueAtTime(0.4, now + 0.15);
+    gain3.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+    osc3.connect(gain3);
+    gain3.connect(masterGain);
+    osc3.start(now + 0.15);
+    osc3.stop(now + 0.8);
 }
 
 function playShotgunSound() {
@@ -444,14 +514,14 @@ function playShotgunSound() {
     osc1.type = 'sawtooth';
     osc1.frequency.setValueAtTime(140, now);
     osc1.frequency.exponentialRampToValueAtTime(45, now + 0.5);
-    gain1.gain.setValueAtTime(0.8, now);
+    gain1.gain.setValueAtTime(1.0, now);
     gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
     osc1.connect(gain1);
     gain1.connect(masterGain);
     osc1.start(now);
     osc1.stop(now + 0.5);
 
-    const bufferSize = audioContext.sampleRate * 0.25;
+    const bufferSize = audioContext.sampleRate * 0.35;
     const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
     const noiseData = noiseBuffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
@@ -460,8 +530,8 @@ function playShotgunSound() {
     const noise = audioContext.createBufferSource();
     noise.buffer = noiseBuffer;
     const noiseGain = audioContext.createGain();
-    noiseGain.gain.setValueAtTime(0.5, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+    noiseGain.gain.setValueAtTime(0.7, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
     noise.connect(noiseGain);
     noiseGain.connect(masterGain);
     noise.start(now);
@@ -523,14 +593,28 @@ function playDroneSound() {
     const gain = audioContext.createGain();
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(85, now);
-    osc.frequency.linearRampToValueAtTime(95, now + 0.12);
-    osc.frequency.linearRampToValueAtTime(85, now + 0.24);
-    gain.gain.setValueAtTime(0.18, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.24);
+    osc.frequency.linearRampToValueAtTime(95, now + 0.15);
+    osc.frequency.linearRampToValueAtTime(85, now + 0.3);
+    gain.gain.setValueAtTime(0.35, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
     osc.connect(gain);
     gain.connect(masterGain);
     osc.start(now);
-    osc.stop(now + 0.24);
+    osc.stop(now + 0.3);
+
+    // Buzzing motor sound
+    const osc2 = audioContext.createOscillator();
+    const gain2 = audioContext.createGain();
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(220, now);
+    osc2.frequency.linearRampToValueAtTime(280, now + 0.15);
+    osc2.frequency.linearRampToValueAtTime(220, now + 0.3);
+    gain2.gain.setValueAtTime(0.15, now);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+    osc2.connect(gain2);
+    gain2.connect(masterGain);
+    osc2.start(now);
+    osc2.stop(now + 0.3);
 }
 
 function playReloadSound() {
@@ -557,14 +641,26 @@ function playHitSound() {
     const osc = audioContext.createOscillator();
     const gain = audioContext.createGain();
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(350, now);
-    osc.frequency.exponentialRampToValueAtTime(110, now + 0.18);
-    gain.gain.setValueAtTime(0.35, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+    osc.frequency.setValueAtTime(500, now);
+    osc.frequency.exponentialRampToValueAtTime(150, now + 0.2);
+    gain.gain.setValueAtTime(0.6, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
     osc.connect(gain);
     gain.connect(masterGain);
     osc.start(now);
-    osc.stop(now + 0.18);
+    osc.stop(now + 0.2);
+
+    // Metallic ping
+    const osc2 = audioContext.createOscillator();
+    const gain2 = audioContext.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.value = 1800;
+    gain2.gain.setValueAtTime(0.3, now);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    osc2.connect(gain2);
+    gain2.connect(masterGain);
+    osc2.start(now);
+    osc2.stop(now + 0.08);
 }
 
 function playPowerupSound() {
@@ -591,14 +687,26 @@ function playDamageSound() {
     const osc = audioContext.createOscillator();
     const gain = audioContext.createGain();
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(200, now);
-    osc.frequency.exponentialRampToValueAtTime(50, now + 0.3);
-    gain.gain.setValueAtTime(0.4, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+    osc.frequency.setValueAtTime(250, now);
+    osc.frequency.exponentialRampToValueAtTime(50, now + 0.4);
+    gain.gain.setValueAtTime(0.7, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
     osc.connect(gain);
     gain.connect(masterGain);
     osc.start(now);
-    osc.stop(now + 0.3);
+    osc.stop(now + 0.4);
+
+    // Alarm-like beep for taking damage
+    const osc2 = audioContext.createOscillator();
+    const gain2 = audioContext.createGain();
+    osc2.type = 'square';
+    osc2.frequency.value = 800;
+    gain2.gain.setValueAtTime(0.3, now);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc2.connect(gain2);
+    gain2.connect(masterGain);
+    osc2.start(now);
+    osc2.stop(now + 0.15);
 }
 
 // ============================================
@@ -1699,6 +1807,8 @@ document.addEventListener('keydown', (e) => {
         switchWeapon('sniper');
     } else if (e.key === '3') {
         switchWeapon('shotgun');
+    } else if (e.key === 't' || e.key === 'T') {
+        toggleAutoTrack();
     }
 });
 
@@ -1726,6 +1836,190 @@ window.addEventListener('resize', () => {
 });
 
 // ============================================
+// Auto-Tracking System
+// ============================================
+
+function findNearestDrone() {
+    if (gameState.drones.length === 0) return null;
+
+    const cameraDir = new THREE.Vector3();
+    camera.getWorldDirection(cameraDir);
+    const cameraPos = camera.position;
+
+    let bestDrone = null;
+    let bestScore = -Infinity;
+
+    for (const drone of gameState.drones) {
+        const dronePos = drone.mesh.position;
+        const toDrone = new THREE.Vector3().subVectors(dronePos, cameraPos);
+        const distance = toDrone.length();
+
+        if (distance > 300) continue;
+
+        toDrone.normalize();
+        const angle = Math.acos(Math.max(-1, Math.min(1, cameraDir.dot(toDrone))));
+
+        if (angle > autoTrackConfig.maxAngle) continue;
+
+        // Score: prefer closer drones and those nearer to crosshair
+        // Lower angle = better, lower distance = better
+        const angleScore = 1 - (angle / autoTrackConfig.maxAngle);
+        const distScore = 1 - Math.min(distance / autoTrackConfig.priorityRange, 1);
+        const aggressiveBonus = drone.aggressive ? 0.3 : 0;
+        const score = angleScore * 0.6 + distScore * 0.3 + aggressiveBonus;
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestDrone = drone;
+        }
+    }
+
+    return bestDrone;
+}
+
+function updateAutoTracking(delta) {
+    if (!autoTrackEnabled || gameState.drones.length === 0) return;
+
+    const targetDrone = findNearestDrone();
+    if (!targetDrone) return;
+
+    const dronePos = targetDrone.mesh.position;
+    const cameraPos = camera.position;
+
+    // Calculate desired rotation to look at drone
+    const toDrone = new THREE.Vector3().subVectors(dronePos, cameraPos);
+    const distance = toDrone.length();
+
+    // Calculate target yaw (Y rotation) and pitch (X rotation)
+    const targetYaw = -Math.atan2(toDrone.x, toDrone.z);
+    const horizontalDist = Math.sqrt(toDrone.x * toDrone.x + toDrone.z * toDrone.z);
+    const targetPitch = Math.atan2(toDrone.y, horizontalDist);
+
+    // Clamp target pitch
+    const clampedPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetPitch));
+
+    // Calculate angle differences (handling wrapping for yaw)
+    let yawDiff = targetYaw - camera.rotation.y;
+    // Normalize to -PI to PI
+    while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+    while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+
+    let pitchDiff = clampedPitch - camera.rotation.x;
+
+    // Adaptive speed: faster when far from target, slower when close (for precision)
+    const angleMag = Math.sqrt(yawDiff * yawDiff + pitchDiff * pitchDiff);
+    const adaptiveSpeed = autoTrackConfig.smoothSpeed * Math.min(angleMag * 2, 1);
+
+    // Smoothly interpolate camera rotation toward target
+    const lerpFactor = 1 - Math.exp(-adaptiveSpeed * delta);
+    camera.rotation.y += yawDiff * lerpFactor;
+    camera.rotation.x += pitchDiff * lerpFactor;
+
+    // Clamp pitch
+    camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+}
+
+function updateDroneDirectionIndicators() {
+    const arrowLeft = document.getElementById('droneArrowLeft');
+    const arrowRight = document.getElementById('droneArrowRight');
+    const arrowTop = document.getElementById('droneArrowTop');
+    const arrowBottom = document.getElementById('droneArrowBottom');
+
+    if (!arrowLeft || gameState.drones.length === 0) {
+        if (arrowLeft) arrowLeft.style.opacity = '0';
+        if (arrowRight) arrowRight.style.opacity = '0';
+        if (arrowTop) arrowTop.style.opacity = '0';
+        if (arrowBottom) arrowBottom.style.opacity = '0';
+        return;
+    }
+
+    // Find the nearest drone that's off-screen
+    let showLeft = false, showRight = false, showTop = false, showBottom = false;
+    let minLeftDist = Infinity, minRightDist = Infinity;
+    let minTopDist = Infinity, minBottomDist = Infinity;
+
+    const cameraDir = new THREE.Vector3();
+    camera.getWorldDirection(cameraDir);
+
+    for (const drone of gameState.drones) {
+        const dronePos = drone.mesh.position.clone();
+        dronePos.project(camera);
+
+        // dronePos.x and dronePos.y are in NDC (-1 to 1)
+        // dronePos.z > 1 means behind camera
+        const isBehind = dronePos.z > 1;
+        const isOnScreen = !isBehind &&
+            dronePos.x >= -1 && dronePos.x <= 1 &&
+            dronePos.y >= -1 && dronePos.y <= 1;
+
+        if (isOnScreen) continue;
+
+        const dist = camera.position.distanceTo(drone.mesh.position);
+        if (dist > 300) continue;
+
+        // Determine direction
+        let screenX = dronePos.x;
+        let screenY = dronePos.y;
+
+        if (isBehind) {
+            screenX = -screenX;
+            screenY = -screenY;
+        }
+
+        if (screenX < -0.8 && dist < minLeftDist) {
+            showLeft = true;
+            minLeftDist = dist;
+        }
+        if (screenX > 0.8 && dist < minRightDist) {
+            showRight = true;
+            minRightDist = dist;
+        }
+        if (screenY > 0.8 && dist < minTopDist) {
+            showTop = true;
+            minTopDist = dist;
+        }
+        if (screenY < -0.8 && dist < minBottomDist) {
+            showBottom = true;
+            minBottomDist = dist;
+        }
+    }
+
+    arrowLeft.style.opacity = showLeft ? '0.8' : '0';
+    arrowRight.style.opacity = showRight ? '0.8' : '0';
+    arrowTop.style.opacity = showTop ? '0.8' : '0';
+    arrowBottom.style.opacity = showBottom ? '0.8' : '0';
+}
+
+function toggleAutoTrack() {
+    autoTrackEnabled = !autoTrackEnabled;
+    const indicator = document.getElementById('trackingIndicator');
+    if (indicator) {
+        indicator.textContent = autoTrackEnabled ?
+            '🎯 자동 추적 ON [T]' :
+            '🎯 자동 추적 OFF [T]';
+        indicator.style.color = autoTrackEnabled ? '#00ffff' : '#888888';
+        indicator.style.borderColor = autoTrackEnabled ? '#00ffff' : '#888888';
+        indicator.classList.add('show');
+        setTimeout(() => indicator.classList.remove('show'), 2000);
+    }
+
+    // Play toggle sound
+    if (audioContext) {
+        const now = audioContext.currentTime;
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = autoTrackEnabled ? 600 : 400;
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.start(now);
+        osc.stop(now + 0.1);
+    }
+}
+
+// ============================================
 // Animation Loop
 // ============================================
 
@@ -1745,6 +2039,8 @@ function animate() {
     updateComboTimer(delta);
     updateRecoil(delta);
     updateCameraShake(delta);
+    updateAutoTracking(delta);
+    updateDroneDirectionIndicators();
 
     renderer.render(scene, camera);
 }
@@ -1775,6 +2071,24 @@ function startGame() {
     if (!scene) {
         initScene();
         initAudioSystem();
+    }
+
+    // Show audio indicator briefly
+    const audioInd = document.getElementById('audioIndicator');
+    if (audioInd) {
+        audioInd.classList.add('show');
+        setTimeout(() => audioInd.classList.remove('show'), 3000);
+    }
+
+    // Show tracking indicator
+    autoTrackEnabled = true;
+    const trackInd = document.getElementById('trackingIndicator');
+    if (trackInd) {
+        trackInd.textContent = '🎯 자동 추적 ON [T]';
+        trackInd.style.color = '#00ffff';
+        trackInd.style.borderColor = '#00ffff';
+        trackInd.classList.add('show');
+        setTimeout(() => trackInd.classList.remove('show'), 3000);
     }
 
     updateHUD();
